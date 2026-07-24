@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: twintube_app
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_TYPE=postgres
+      - DATABASE_URL=postgres://twintube_user:twintube_secure_password@postgres:5432/twintube_db?sslmode=disable
+      - JWT_SECRET=change_this_to_your_secure_vps_jwt_secret_key_12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: twintube_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: twintube_user
+      POSTGRES_PASSWORD: twintube_secure_password
+      POSTGRES_DB: twintube_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twintube_user -d twintube_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local

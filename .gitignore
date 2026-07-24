@@ -1,0 +1,22 @@
+# Binaries and executables
+*.exe
+*.exe;
+*.dll
+*.so
+*.dylib
+twintube
+twintube.exe
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+
+# OS & IDE metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
