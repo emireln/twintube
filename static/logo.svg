@@ -1,40 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Gradient for Primary Screen -->
+    <!-- Primary Blue to Red Gradient -->
     <linearGradient id="twinPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#1a73e8" />
-      <stop offset="50%" stop-color="#4285f4" />
-      <stop offset="100%" stop-color="#ea4335" />
-    </linearGradient>
-    
-    <!-- Gradient for Synchronized Secondary Screen -->
-    <linearGradient id="twinSecondary" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ea4335" />
-      <stop offset="100%" stop-color="#fbbc05" />
+      <stop offset="55%" stop-color="#4285f4" />
+      <stop offset="100%" stop-color="#d93025" />
     </linearGradient>
 
-    <!-- Soft Drop Shadow for Depth -->
-    <filter id="materialShadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    <!-- Secondary Accent Gradient -->
+    <linearGradient id="twinSecondary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea4335" />
+      <stop offset="100%" stop-color="#fbbc04" />
+    </linearGradient>
+
+    <!-- Drop Shadow -->
+    <filter id="materialShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.3"/>
     </filter>
   </defs>
 
-  <!-- Secondary Background Screen (Synchronized Twin) -->
-  <rect x="136" y="96" width="310" height="210" rx="36" fill="url(#twinSecondary)" opacity="0.85" transform="rotate(6 291 201)" filter="url(#materialShadow)" />
+  <g filter="url(#materialShadow)">
+    <!-- Back Screen (Rotated Twin) -->
+    <rect x="142" y="92" width="310" height="210" rx="36" fill="url(#twinSecondary)" opacity="0.9" transform="rotate(7 297 197)" />
 
-  <!-- Primary Foreground Screen -->
-  <rect x="66" y="156" width="330" height="220" rx="38" fill="url(#twinPrimary)" filter="url(#materialShadow)" />
+    <!-- Front Primary Screen -->
+    <rect x="60" y="160" width="330" height="220" rx="38" fill="url(#twinPrimary)" />
 
-  <!-- Inner Display Screen Outline -->
-  <rect x="82" y="172" width="298" height="188" rx="26" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.3" />
+    <!-- Inner Screen Border -->
+    <rect x="74" y="174" width="302" height="192" rx="26" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.22" />
 
-  <!-- Synchronized Twin Play Triangle -->
-  <path d="M 205 210 L 285 266 L 205 322 Z" fill="#ffffff" filter="url(#materialShadow)" />
+    <!-- Centered Twin Play Triangle -->
+    <path d="M 212 232 L 272 270 L 212 308 Z" fill="#ffffff" />
 
-  <!-- Circular Sync Arrows Ring around Play Button -->
-  <path d="M 256 195 A 70 70 0 0 1 320 280" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
-  <polyline points="325,260 322,286 296,282" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+    <!-- Top-Right Sync Arc -->
+    <path d="M 225 198 A 72 72 0 0 1 326 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+    <path d="M 326 278 L 340 254 L 312 254 Z" fill="#ffffff" />
 
-  <path d="M 256 337 A 70 70 0 0 1 192 252" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
-  <polyline points="187,272 190,246 216,250" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+    <!-- Bottom-Left Sync Arc -->
+    <path d="M 225 342 A 72 72 0 0 1 124 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+    <path d="M 124 262 L 110 286 L 138 286 Z" fill="#ffffff" />
+  </g>
 </svg>
