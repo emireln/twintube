@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Gradient for Primary Screen -->
+    <linearGradient id="twinPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a73e8" />
+      <stop offset="50%" stop-color="#4285f4" />
+      <stop offset="100%" stop-color="#ea4335" />
+    </linearGradient>
+    
+    <!-- Gradient for Synchronized Secondary Screen -->
+    <linearGradient id="twinSecondary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea4335" />
+      <stop offset="100%" stop-color="#fbbc05" />
+    </linearGradient>
+
+    <!-- Soft Drop Shadow for Depth -->
+    <filter id="materialShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Secondary Background Screen (Synchronized Twin) -->
+  <rect x="136" y="96" width="310" height="210" rx="36" fill="url(#twinSecondary)" opacity="0.85" transform="rotate(6 291 201)" filter="url(#materialShadow)" />
+
+  <!-- Primary Foreground Screen -->
+  <rect x="66" y="156" width="330" height="220" rx="38" fill="url(#twinPrimary)" filter="url(#materialShadow)" />
+
+  <!-- Inner Display Screen Outline -->
+  <rect x="82" y="172" width="298" height="188" rx="26" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.3" />
+
+  <!-- Synchronized Twin Play Triangle -->
+  <path d="M 205 210 L 285 266 L 205 322 Z" fill="#ffffff" filter="url(#materialShadow)" />
+
+  <!-- Circular Sync Arrows Ring around Play Button -->
+  <path d="M 256 195 A 70 70 0 0 1 320 280" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
+  <polyline points="325,260 322,286 296,282" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+
+  <path d="M 256 337 A 70 70 0 0 1 192 252" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
+  <polyline points="187,272 190,246 216,250" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+</svg>
