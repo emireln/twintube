@@ -1,4 +1,4 @@
-package main
+package room
 
 import (
 	"encoding/json"
@@ -7,39 +7,17 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"twintube/internal/db"
 )
 
-// VideoState represents the authoritative video state on the server
 type VideoState struct {
 	VideoID         string  `json:"videoId"`
 	Title           string  `json:"title"`
-	Status          string  `json:"status"` // "PLAYING" | "PAUSED"
+	Status          string  `json:"status"`
 	CurrentTime     float64 `json:"currentTime"`
-	ServerTimestamp int64   `json:"serverTimestamp"` // Unix timestamp in milliseconds
+	ServerTimestamp int64   `json:"serverTimestamp"`
 }
 
-// PlaylistItem represents a video in the collaborative queue
-type PlaylistItem struct {
-	ID           string `json:"id"`
-	RoomID       string `json:"roomId"`
-	VideoID      string `json:"videoId"`
-	Title        string `json:"title"`
-	Author       string `json:"author"`
-	ThumbnailURL string `json:"thumbnailUrl"`
-	Position     int    `json:"position"`
-	AddedBy      string `json:"addedBy"`
-}
-
-// ChatMessage represents a user or system message
-type ChatMessage struct {
-	Type      string `json:"type"` // "chat"
-	Nickname  string `json:"nickname"`
-	Content   string `json:"content"`
-	IsSystem  bool   `json:"isSystem"`
-	Timestamp string `json:"timestamp"`
-}
-
-// UserSummary represents a viewer in the room
 type UserSummary struct {
 	ID        string `json:"id"`
 	UserID    string `json:"userId,omitempty"`
@@ -49,14 +27,12 @@ type UserSummary struct {
 	AvatarURL string `json:"avatarUrl,omitempty"`
 }
 
-// WSMessage is the standard WebSocket payload envelope
 type WSMessage struct {
 	Action    string          `json:"action"`
 	Payload   json.RawMessage `json:"payload,omitempty"`
 	Timestamp int64           `json:"timestamp,omitempty"`
 }
 
-// Client represents a connected user via WebSocket
 type Client struct {
 	ID        string
 	UserID    string
@@ -70,7 +46,6 @@ type Client struct {
 	Room      *Room
 }
 
-// Room represents a single video watch room
 type Room struct {
 	ID         string
 	Name       string
@@ -78,14 +53,13 @@ type Room struct {
 	HostID     string
 	State      VideoState
 	Clients    map[string]*Client
-	Playlist   []PlaylistItem
+	Playlist   []db.PlaylistItem
 	Register   chan *Client
 	Unregister chan *Client
 	Broadcast  chan WSMessage
 	mu         sync.RWMutex
 }
 
-// RoomManager maintains all active rooms in memory
 type RoomManager struct {
 	rooms map[string]*Room
 	mu    sync.RWMutex
@@ -113,14 +87,14 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 				ServerTimestamp: time.Now().UnixNano() / 1e6,
 			},
 			Clients:    make(map[string]*Client),
-			Playlist:   make([]PlaylistItem, 0),
+			Playlist:   make([]db.PlaylistItem, 0),
 			Register:   make(chan *Client),
 			Unregister: make(chan *Client),
 			Broadcast:  make(chan WSMessage),
 		}
 
-		if Database != nil {
-			if items, err := Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
+		if db.Database != nil {
+			if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
 				room.Playlist = items
 			}
 		}
@@ -239,8 +213,8 @@ func (r *Room) SendInitState(client *Client) {
 		Timestamp: time.Now().UnixNano() / 1e6,
 	}
 
-	if Database != nil {
-		if history, err := Database.LoadChatHistory(r.ID, 50); err == nil && len(history) > 0 {
+	if db.Database != nil {
+		if history, err := db.Database.LoadChatHistory(r.ID, 50); err == nil && len(history) > 0 {
 			rawHistory, _ := json.Marshal(history)
 			client.Send <- WSMessage{
 				Action:  "CHAT_HISTORY",
@@ -278,7 +252,7 @@ func (r *Room) getUserListUnsafe() []UserSummary {
 }
 
 func (r *Room) BroadcastSystemAlert(content string) {
-	msg := ChatMessage{
+	msg := db.ChatMessage{
 		Type:      "chat",
 		Nickname:  "System",
 		Content:   content,
@@ -286,8 +260,8 @@ func (r *Room) BroadcastSystemAlert(content string) {
 		Timestamp: time.Now().Format("15:04"),
 	}
 
-	if Database != nil {
-		_ = Database.SaveChatMessage(r.ID, "", "System", content, true)
+	if db.Database != nil {
+		_ = db.Database.SaveChatMessage(r.ID, "", "System", content, true)
 	}
 
 	raw, _ := json.Marshal(msg)
@@ -308,8 +282,8 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		r.State.Title = title
 	}
 
-	if Database != nil {
-		_ = Database.SaveRoom(r.ID, r.HostID, r.State.VideoID, r.State.Status, r.State.CurrentTime)
+	if db.Database != nil {
+		_ = db.Database.SaveRoom(r.ID, r.HostID, r.State.VideoID, r.State.Status, r.State.CurrentTime)
 	}
 	r.mu.Unlock()
 

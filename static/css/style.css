@@ -147,6 +147,28 @@ body {
   color: var(--md-primary);
 }
 
+/* Buy Me A Coffee Button */
+.bmc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #FFDD00;
+  color: #000000;
+  font-family: var(--font-brand);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  text-decoration: none;
+  box-shadow: var(--md-shadow-1);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.bmc-btn:hover {
+  background-color: #ffea00;
+  transform: translateY(-1px);
+}
+
 /* User Profile & Dropdown */
 .user-profile-menu {
   position: relative;
@@ -283,7 +305,114 @@ body {
   color: var(--md-on-surface);
 }
 
-/* App Main Layout Grid */
+/* Landing Page Styles (SyncTube Inspired) */
+.landing-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.hero-mockup-card {
+  width: 320px;
+  height: 180px;
+  background-color: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 36px;
+  box-shadow: var(--md-shadow-3);
+}
+
+.mockup-screen {
+  flex: 1;
+  background-color: #121212;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ea4335;
+  font-size: 24px;
+}
+
+.mockup-sidebar {
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.mockup-line {
+  height: 8px;
+  background-color: #333333;
+  border-radius: 4px;
+}
+
+.mockup-line.long { width: 100%; }
+.mockup-line.short { width: 70%; }
+
+.landing-title {
+  font-family: var(--font-brand);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--md-on-surface);
+  margin-bottom: 40px;
+}
+
+.btn-create-room-large {
+  background-color: #121212;
+  color: #ffffff;
+  border: 1px solid #2a2a2a;
+  border-radius: 40px;
+  padding: 20px 64px;
+  font-family: var(--font-brand);
+  font-size: 22px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--md-shadow-2);
+  transition: all var(--transition-fast);
+}
+
+[data-theme="light"] .btn-create-room-large {
+  background-color: #ffffff;
+  color: #121212;
+  border-color: #dadce0;
+}
+
+.btn-create-room-large:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--md-shadow-3);
+  background-color: var(--md-primary);
+  color: #ffffff;
+  border-color: var(--md-primary);
+}
+
+.landing-bmc-container {
+  margin-top: 48px;
+}
+
+.bmc-landing-link {
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.bmc-landing-link:hover {
+  color: #FFDD00;
+  text-decoration: underline;
+}
+
+/* App Main Layout Grid (Room View) */
 .app-container {
   flex: 1;
   max-width: 1600px;

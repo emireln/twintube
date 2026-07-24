@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TwinTube - Watch Room</title>
+  <meta name="description" content="Real-time synchronized video watching room.">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <a href="/" class="brand">
+      <img src="/static/logo.svg" alt="TwinTube Logo" class="brand-icon-img">
+      <span>Twin<span class="accent">Tube</span></span>
+    </a>
+
+    <div class="nav-actions">
+      <!-- Room Code Badge -->
+      <div class="room-chip" id="roomChip" style="display: none;">
+        <span>Room:</span>
+        <code id="roomCodeText">------</code>
+        <button class="btn-icon" id="btnCopyRoom" title="Copy Room Link">📋</button>
+      </div>
+
+      <!-- Buy Me A Coffee Button -->
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-btn" title="Buy me a coffee">
+        <span>☕ Buy me a coffee</span>
+      </a>
+
+      <!-- Theme Toggle -->
+      <button class="btn-icon" id="btnThemeToggle" title="Toggle Light/Dark Theme">🌙</button>
+
+      <!-- New Room Button -->
+      <button class="btn btn-primary" id="btnNewRoom">
+        <span>+ New Room</span>
+      </button>
+
+      <!-- User Auth Section -->
+      <div id="authNavContainer">
+        <button class="btn btn-secondary" id="btnOpenAuth">Sign In</button>
+        <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
+          <button class="user-avatar-btn" id="btnUserMenu">
+            <span id="userAvatarText">U</span>
+          </button>
+          <div class="dropdown-menu" id="profileDropdown">
+            <div class="dropdown-header">
+              <strong id="dropdownUsername">Username</strong>
+              <small id="dropdownEmail">user@example.com</small>
+            </div>
+            <hr>
+            <button class="dropdown-item" id="btnLogout">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid App Body -->
+  <main class="app-container">
+
+    <!-- Left Column: Video Player & Meta Info -->
+    <section class="player-column">
+      <div class="player-wrapper">
+        <div id="ytPlayer"></div>
+      </div>
+
+      <!-- Ambient Video Info Bar -->
+      <div class="video-meta-card">
+        <div class="video-info">
+          <h1 class="video-title" id="videoTitle">Rick Astley - Never Gonna Give You Up</h1>
+          <div class="status-badges">
+            <span class="badge badge-paused" id="statusBadge">
+              <span class="badge-dot"></span>
+              <span id="statusText">PAUSED</span>
+            </span>
+            <span class="badge badge-host" id="hostBadge" style="display: none;">
+              <span>👑 You are Host</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="player-controls-meta">
+          <button class="btn btn-secondary" id="btnResync" title="Force Sync to Server Position">
+            🔄 Resync
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Tabbed Panel -->
+    <section class="panel-column">
+      <!-- Material Tab Bar -->
+      <nav class="tab-header">
+        <button class="tab-btn active" data-tab="chatTab">
+          💬 Chat
+        </button>
+        <button class="tab-btn" data-tab="queueTab">
+          📜 Queue <span class="tab-counter" id="queueCounter">0</span>
+        </button>
+        <button class="tab-btn" data-tab="viewersTab">
+          👥 Viewers <span class="tab-counter" id="viewersCounter">1</span>
+        </button>
+      </nav>
+
+      <!-- Tab 1: Live Chat -->
+      <div class="tab-content active" id="chatTab">
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <form class="chat-input-bar" id="chatForm">
+          <input type="text" id="chatInput" class="input-field" placeholder="Send a message..." autocomplete="off">
+          <button type="submit" class="btn btn-primary">Send</button>
+        </form>
+      </div>
+
+      <!-- Tab 2: Playlist Queue -->
+      <div class="tab-content" id="queueTab">
+        <form class="queue-input-bar" id="queueForm">
+          <input type="text" id="queueInput" class="input-field" placeholder="Paste YouTube link or Video ID..." required>
+          <button type="submit" class="btn btn-primary">+ Add</button>
+        </form>
+
+        <div class="queue-list" id="queueList"></div>
+      </div>
+
+      <!-- Tab 3: Audience Viewers -->
+      <div class="tab-content" id="viewersTab">
+        <div class="viewers-list" id="viewersList"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Auth Modal (Login / Register) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card">
+      <nav class="tab-header" style="border-radius: var(--radius-sm); margin-bottom: 16px;">
+        <button class="tab-btn active" id="btnTabLogin">Sign In</button>
+        <button class="tab-btn" id="btnTabRegister">Create Account</button>
+      </nav>
+
+      <!-- Login Form -->
+      <form id="formLogin" class="modal-body">
+        <div>
+          <label style="font-size: 12px; font-weight: 500;">Username or Email</label>
+          <input type="text" id="loginUser" class="input-field" style="width: 100%; margin-top: 4px;" required>
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: 500;">Password</label>
+          <input type="password" id="loginPass" class="input-field" style="width: 100%; margin-top: 4px;" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Sign In</button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="formRegister" class="modal-body" style="display: none;">
+        <div>
+          <label style="font-size: 12px; font-weight: 500;">Username</label>
+          <input type="text" id="regUser" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="3">
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: 500;">Email</label>
+          <input type="email" id="regEmail" class="input-field" style="width: 100%; margin-top: 4px;" required>
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: 500;">Password</label>
+          <input type="password" id="regPass" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Create Account</button>
+      </form>
+
+      <div class="modal-footer" style="justify-content: center;">
+        <button class="btn btn-secondary" id="btnCloseAuth">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nickname Picker Modal (Guest Join) -->
+  <div class="modal-overlay" id="nicknameModal">
+    <div class="modal-card">
+      <h2 class="modal-title">Welcome to TwinTube</h2>
+      <div class="modal-body">
+        <p style="font-size: 14px; color: var(--md-on-surface-variant);">
+          Join as a guest by entering a nickname, or sign in to save your identity:
+        </p>
+        <input type="text" id="nicknameInput" class="input-field" placeholder="e.g. Alex" maxlength="20" autofocus required>
+      </div>
+      <div class="modal-footer" style="flex-direction: column; gap: 8px;">
+        <button class="btn btn-primary" id="btnSaveNickname" style="width: 100%;">Join as Guest</button>
+        <button class="btn btn-secondary" id="btnOpenAuthFromNick" style="width: 100%;">Sign In / Create Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Client JavaScript Modules -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

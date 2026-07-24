@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Real-Time Synchronized Video Watching Platform</b><br>
-  Inspired by Google Material Design 3 • Built with Go, WebSockets & PostgreSQL
+  Inspired by SyncTube & Google Material Design 3 • Built with Go, WebSockets & PostgreSQL
 </p>
 
 <p align="center">
@@ -15,12 +15,14 @@
   <img src="https://img.shields.io/badge/WebSockets-Gorilla-FF69B4?style=flat" alt="WebSockets">
   <img src="https://img.shields.io/badge/Styling-Material%20Design%203-757575?style=flat&logo=google" alt="Material Design 3">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License">
+  <a href="https://buymeacoffee.com/emireln" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
 </p>
 
 ---
 
 ## 🌟 Features
 
+- 🏠 **SyncTube-Style Landing Page**: Minimalist landing page with instant **Create Room** button, Log In / Sign Up actions, and creator support link.
 - ⚡ **Server-Authoritative Sync Engine**: Ultra-low latency playback synchronization over WebSockets with automatic drift correction (**>1.5s tolerance** auto-seek).
 - 📺 **YouTube iFrame API Integration**: Seamless playback control with auto-advance to the next video when current playback ends.
 - 📜 **Collaborative Queue**: Paste YouTube links or Video IDs. Automatically fetches video titles, author names, and thumbnails via oEmbed.
@@ -28,6 +30,7 @@
 - 🔐 **User Auth & Guest Access**: Register/Login using **JWT** tokens and **bcrypt** password hashing, or **Join as Guest** without registration.
 - 🐘 **PostgreSQL & SQLite Dual Engine**: Native PostgreSQL connection for production VPS deployments, with zero-config SQLite fallback.
 - 🎨 **Google Material 3 Aesthetics**: Google Blue (`#1a73e8`), elevation shadows, responsive 70%/30% grid desktop layout, and light/dark theme toggle.
+- ☕ **Buy Me a Coffee Support**: Direct integrated link to support the creator at [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
 - 🐳 **Docker VPS Ready**: Includes multi-stage `Dockerfile` and `docker-compose.yml` orchestrating TwinTube + PostgreSQL 16.
 
 ---
@@ -45,30 +48,41 @@
 
 ---
 
-## 📂 Repository Structure
+## 📂 Repository Structure (Standard Go Package Layout)
 
 ```
 twintube/
-├── main.go              # Web server setup, routes, static server, WS handler & Auth API
-├── auth.go              # User Registration, Login, JWT generation/validation, password hashing
-├── room.go              # Room engine, client connection manager, server-authoritative sync
-├── db.go                # PostgreSQL / SQLite dual driver setup & schema migrations
-├── utils.go             # Helper utilities (ID generator, YouTube URL parser, oEmbed metadata)
+├── main.go              # Root entry point delegating server execution
+├── go.mod               # Go module definition
 ├── Dockerfile           # Multi-stage production container build
 ├── docker-compose.yml   # Production Compose configuration for TwinTube + PostgreSQL 16
 ├── .env.example         # Production environment configuration template
+├── cmd/
+│   └── server/
+│       └── main.go      # Application server entrypoint and HTTP routes
+├── internal/
+│   ├── auth/
+│   │   └── auth.go      # User Registration, Login, JWT generation/validation
+│   ├── db/
+│   │   └── db.go        # PostgreSQL / SQLite dual driver setup & schema migrations
+│   ├── room/
+│   │   └── room.go      # Room engine & server-authoritative sync logic
+│   └── utils/
+│       └── utils.go     # Helper utilities (oEmbed metadata, ID generation)
 └── static/
     ├── logo.svg         # Transparent Google Material 3 app logo
     ├── favicon.svg      # SVG browser favicon
-    ├── index.html       # Single-page application layout
+    ├── index.html       # SyncTube-style Landing Page layout
+    ├── room.html        # Watch Room layout
     ├── css/
-    │   └── style.css    # Material Design 3 theme tokens & responsive styles
+    │   └── style.css    # Material Design 3 theme tokens & landing styles
     └── js/
-        ├── app.js       # Main application orchestrator
+        ├── landing.js   # Landing page controller
+        ├── app.js       # Main watch room orchestrator
         ├── auth.js      # Client authentication manager
         ├── player.js    # YouTube iFrame API player controller & drift sync engine
         ├── ws.js        # Low-latency WebSocket client with auto-reconnect
-        └── ui.js        # DOM rendering for chat, queue, audience roster, and toasts
+        └── ui.js        # DOM rendering for chat, playlist queue, audience list, and toasts
 ```
 
 ---
@@ -84,11 +98,11 @@ Prerequisites: Go 1.21+ installed on your system.
 git clone https://github.com/emireln/twintube.git
 cd twintube
 
-# Run application (defaults to local SQLite database twintube.db)
+# Run application
 go run .
 ```
 
-Open your browser at `http://localhost:8080` or `http://localhost:8080/room/abc123`.
+Open your browser at `http://localhost:8080`.
 
 ---
 
@@ -122,19 +136,11 @@ TwinTube will be running live on port `8080` backed by a dedicated PostgreSQL 16
 
 ---
 
-## ⚙️ Environment Variables
+## ☕ Support the Creator
 
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `PORT` | `8080` | Port for the HTTP & WebSocket server |
-| `DB_TYPE` | `sqlite` | Database engine (`postgres` or `sqlite`) |
-| `DATABASE_URL` | - | PostgreSQL connection URL string |
-| `POSTGRES_HOST` | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | `5432` | PostgreSQL port |
-| `POSTGRES_USER` | `twintube` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
-| `POSTGRES_DB` | `twintube` | PostgreSQL database name |
-| `JWT_SECRET` | `twintube_default_secret` | Secret key used for signing JWT tokens |
+If you enjoy using TwinTube, consider supporting the project:
+
+[<img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee">](https://buymeacoffee.com/emireln)
 
 ---
 

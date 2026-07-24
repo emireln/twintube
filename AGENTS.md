@@ -6,7 +6,7 @@ Welcome to the **TwinTube** project repository! This document provides technical
 
 ## 🚀 Project Overview
 
-**TwinTube** is a lightweight, real-time synchronized video watching web application inspired by Google Material Design 3. It allows users to create public/private rooms, embed YouTube videos, watch in synchronized playback with low-latency WebSockets, chat with timestamped messages and system alerts, and queue videos collaboratively.
+**TwinTube** is a lightweight, real-time synchronized video watching web application inspired by Google Material Design 3 and SyncTube. It allows users to create public/private rooms, embed YouTube videos, watch in synchronized playback with low-latency WebSockets, chat with timestamped messages and system alerts, and queue videos collaboratively.
 
 ---
 
@@ -20,32 +20,44 @@ Welcome to the **TwinTube** project repository! This document provides technical
 - **State Management**: In-memory thread-safe room manager (`RoomManager`, `Room`) backed by database persistence.
 
 ### Frontend
-- **Structure**: HTML5 (`static/index.html`)
+- **Structure**: HTML5 Landing Page (`static/index.html`) & Watch Room (`static/room.html`)
 - **Styling**: Vanilla CSS3 (`static/css/style.css`) using CSS variables for Google Material 3 themes (Light/Dark mode)
-- **Logic**: Vanilla ES6+ JavaScript Modules (`app.js`, `auth.js`, `player.js`, `ws.js`, `ui.js`)
+- **Logic**: Vanilla ES6+ JavaScript Modules (`landing.js`, `app.js`, `auth.js`, `player.js`, `ws.js`, `ui.js`)
 - **Video Player**: YouTube iFrame Player API (`YT.Player`)
 
 ---
 
-## 📂 Repository Layout
+## 📂 Repository Layout (Standard Go Package Organization)
 
 ```
 twintube/
+├── main.go              # Root entry point delegating server execution
 ├── go.mod               # Go module definition (lib/pq, jwt/v5, crypto)
-├── main.go              # Web server setup, routes, static server, WS upgrade & Auth API
-├── auth.go              # User Registration, Login, JWT generation/validation, password hashing
-├── room.go              # Room engine, client management, server-authoritative sync
-├── db.go                # PostgreSQL / SQLite dual driver setup & schema migrations
-├── utils.go             # Helper utilities (ID generator, YouTube URL parser, oEmbed metadata)
 ├── Dockerfile           # Multi-stage production container build for VPS
 ├── docker-compose.yml   # Production Compose configuration for TwinTube + PostgreSQL 16
 ├── .env.example         # Production environment configuration template
+├── cmd/
+│   └── server/
+│       └── main.go      # Application server entrypoint and HTTP routes
+├── internal/
+│   ├── auth/
+│   │   └── auth.go      # User Registration, Login, JWT generation/validation, password hashing
+│   ├── db/
+│   │   └── db.go        # PostgreSQL / SQLite dual driver setup & schema migrations
+│   ├── room/
+│   │   └── room.go      # Room engine, client management, server-authoritative sync
+│   └── utils/
+│       └── utils.go     # Helper utilities (ID generator, YouTube URL parser, oEmbed metadata)
 └── static/
-    ├── index.html       # Single-page application layout with Auth & Nickname modals
+    ├── logo.svg         # Transparent SVG brand logo
+    ├── favicon.svg      # SVG browser favicon
+    ├── index.html       # SyncTube-inspired Landing Page layout
+    ├── room.html        # Single-page Watch Room layout
     ├── css/
-    │   └── style.css    # Material Design 3 theme tokens & responsive styles
+    │   └── style.css    # Material Design 3 theme tokens & landing page styles
     └── js/
-        ├── app.js       # Main application orchestrator
+        ├── landing.js   # Landing page controller
+        ├── app.js       # Main room orchestrator
         ├── auth.js      # Client authentication manager (Token storage, login/register API)
         ├── player.js    # YouTube iFrame API player controller & drift sync engine (>1.5s)
         ├── ws.js        # Low-latency WebSocket client with auto-reconnect
@@ -57,10 +69,10 @@ twintube/
 ## 📐 Coding Conventions & Guidelines
 
 ### Backend (Go)
-1. **Thread Safety**: All access to room state (`Room.State`, `Room.Clients`, `Room.Playlist`) must be guarded using `sync.RWMutex` (`RLock()` for reads, `Lock()` for state mutations).
-2. **Database Integrity & Rebinding**: Use `Database.Rebind(query)` for all SQL parameters to automatically support `$1, $2` for PostgreSQL and `?` for SQLite.
-3. **Password Security**: Always hash passwords using `bcrypt` (cost 12). Never store plaintext passwords.
-4. **WebSocket Authentication**: Pass JWT `token` in `JOIN_ROOM` payload. If invalid or missing, gracefully fall back to `IsGuest = true` with guest nickname.
+1. **Standard Go Project Layout**: Keep business logic in `internal/` subpackages (`internal/auth`, `internal/db`, `internal/room`, `internal/utils`) and command runners in `cmd/server/main.go`.
+2. **Thread Safety**: All access to room state (`Room.State`, `Room.Clients`, `Room.Playlist`) must be guarded using `sync.RWMutex` (`RLock()` for reads, `Lock()` for state mutations).
+3. **Database Integrity & Rebinding**: Use `Database.Rebind(query)` for all SQL parameters to automatically support `$1, $2` for PostgreSQL and `?` for SQLite.
+4. **Password Security**: Always hash passwords using `bcrypt` (cost 12). Never store plaintext passwords.
 
 ### Sync Logic & Player Engine
 1. **Server-Authoritative Sync**: The backend holds the true video state (`videoId`, `status`, `currentTime`, `serverTimestamp`). The calculated current playback position is:

@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"crypto/rand"
@@ -16,7 +16,6 @@ import (
 func GenerateRandomID(length int) string {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to timestamp if crypto rand fails
 		return fmt.Sprintf("%x", time.Now().UnixNano())[:length*2]
 	}
 	return hex.EncodeToString(bytes)
@@ -38,12 +37,10 @@ func GenerateRoomCode() string {
 func ExtractYouTubeID(input string) (string, error) {
 	input = strings.TrimSpace(input)
 	
-	// Direct 11-character video ID match
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]{11}$`, input); matched {
 		return input, nil
 	}
 
-	// Regex for youtube.com, youtu.be, shorts, etc.
 	re := regexp.MustCompile(`(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/ ]{11})`)
 	matches := re.FindStringSubmatch(input)
 	if len(matches) > 1 {
@@ -60,7 +57,7 @@ type YouTubeMetadata struct {
 	ThumbnailURL string `json:"thumbnail_url"`
 }
 
-// FetchYouTubeMetadata fetches public metadata via YouTube's oEmbed endpoint (no API key needed)
+// FetchYouTubeMetadata fetches public metadata via YouTube's oEmbed endpoint
 func FetchYouTubeMetadata(videoID string) (*YouTubeMetadata, error) {
 	targetURL := fmt.Sprintf("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=%s&format=json", url.QueryEscape(videoID))
 	

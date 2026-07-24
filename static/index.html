@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TwinTube - Synchronized Video Watching Platform</title>
-  <meta name="description" content="Watch YouTube videos in real-time synchronization with friends. Pure low-latency WebSocket playback sync, live chat, and collaborative playlist queue.">
+  <title>TwinTube - Watch YouTube Videos Together</title>
+  <meta name="description" content="A simple, real-time synchronized platform where you can watch YouTube videos together with friends.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 </head>
-<body>
+<body class="landing-body">
 
-  <!-- Top Navigation Bar -->
+  <!-- Top Navigation Header -->
   <header class="navbar">
     <a href="/" class="brand">
       <img src="/static/logo.svg" alt="TwinTube Logo" class="brand-icon-img">
@@ -18,24 +18,18 @@
     </a>
 
     <div class="nav-actions">
-      <!-- Room Code Badge -->
-      <div class="room-chip" id="roomChip" style="display: none;">
-        <span>Room:</span>
-        <code id="roomCodeText">------</code>
-        <button class="btn-icon" id="btnCopyRoom" title="Copy Room Link">📋</button>
-      </div>
+      <!-- Buy Me A Coffee Button -->
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-btn" title="Buy me a coffee">
+        <span>☕ Buy me a coffee</span>
+      </a>
 
       <!-- Theme Toggle -->
       <button class="btn-icon" id="btnThemeToggle" title="Toggle Light/Dark Theme">🌙</button>
 
-      <!-- New Room Button -->
-      <button class="btn btn-primary" id="btnNewRoom">
-        <span>+ New Room</span>
-      </button>
-
-      <!-- User Auth Section -->
+      <!-- Auth Action Buttons -->
       <div id="authNavContainer">
-        <button class="btn btn-secondary" id="btnOpenAuth">Sign In</button>
+        <button class="btn btn-secondary" id="btnOpenAuthLogin">Log In</button>
+        <button class="btn btn-primary" id="btnOpenAuthRegister">Sign Up</button>
         <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
           <button class="user-avatar-btn" id="btnUserMenu">
             <span id="userAvatarText">U</span>
@@ -53,78 +47,38 @@
     </div>
   </header>
 
-  <!-- Main Grid App Body -->
-  <main class="app-container">
-
-    <!-- Left Column: Video Player & Meta Info -->
-    <section class="player-column">
-      <div class="player-wrapper">
-        <div id="ytPlayer"></div>
+  <!-- Landing Hero Section -->
+  <main class="landing-container">
+    
+    <!-- SyncTube Style Mockup Graphic -->
+    <div class="hero-mockup-card">
+      <div class="mockup-screen">
+        <div class="mockup-play-icon">▶</div>
       </div>
-
-      <!-- Ambient Video Info Bar -->
-      <div class="video-meta-card">
-        <div class="video-info">
-          <h1 class="video-title" id="videoTitle">Rick Astley - Never Gonna Give You Up</h1>
-          <div class="status-badges">
-            <span class="badge badge-paused" id="statusBadge">
-              <span class="badge-dot"></span>
-              <span id="statusText">PAUSED</span>
-            </span>
-            <span class="badge badge-host" id="hostBadge" style="display: none;">
-              <span>👑 You are Host</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="player-controls-meta">
-          <button class="btn btn-secondary" id="btnResync" title="Force Sync to Server Position">
-            🔄 Resync
-          </button>
-        </div>
+      <div class="mockup-sidebar">
+        <div class="mockup-line long"></div>
+        <div class="mockup-line short"></div>
+        <div class="mockup-line short"></div>
       </div>
-    </section>
+    </div>
 
-    <!-- Right Column: Tabbed Panel -->
-    <section class="panel-column">
-      <!-- Material Tab Bar -->
-      <nav class="tab-header">
-        <button class="tab-btn active" data-tab="chatTab">
-          💬 Chat
-        </button>
-        <button class="tab-btn" data-tab="queueTab">
-          📜 Queue <span class="tab-counter" id="queueCounter">0</span>
-        </button>
-        <button class="tab-btn" data-tab="viewersTab">
-          👥 Viewers <span class="tab-counter" id="viewersCounter">1</span>
-        </button>
-      </nav>
+    <!-- Minimal Headline Text -->
+    <h1 class="landing-title">
+      A simple platform where you can watch<br>YouTube videos together.
+    </h1>
 
-      <!-- Tab 1: Live Chat -->
-      <div class="tab-content active" id="chatTab">
-        <div class="chat-messages" id="chatMessages"></div>
+    <!-- Large Prominent Create Room Button -->
+    <button class="btn-create-room-large" id="btnLandingCreateRoom">
+      Create Room
+    </button>
 
-        <form class="chat-input-bar" id="chatForm">
-          <input type="text" id="chatInput" class="input-field" placeholder="Send a message..." autocomplete="off">
-          <button type="submit" class="btn btn-primary">Send</button>
-        </form>
-      </div>
+    <!-- Buy Me A Coffee Banner Link -->
+    <div class="landing-bmc-container">
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-landing-link">
+        ☕ Enjoying TwinTube? Support the creator on Buy Me a Coffee
+      </a>
+    </div>
 
-      <!-- Tab 2: Playlist Queue -->
-      <div class="tab-content" id="queueTab">
-        <form class="queue-input-bar" id="queueForm">
-          <input type="text" id="queueInput" class="input-field" placeholder="Paste YouTube link or Video ID..." required>
-          <button type="submit" class="btn btn-primary">+ Add</button>
-        </form>
-
-        <div class="queue-list" id="queueList"></div>
-      </div>
-
-      <!-- Tab 3: Audience Viewers -->
-      <div class="tab-content" id="viewersTab">
-        <div class="viewers-list" id="viewersList"></div>
-      </div>
-    </section>
   </main>
 
   <!-- Auth Modal (Login / Register) -->
@@ -171,28 +125,10 @@
     </div>
   </div>
 
-  <!-- Nickname Picker Modal (Guest Join) -->
-  <div class="modal-overlay" id="nicknameModal">
-    <div class="modal-card">
-      <h2 class="modal-title">Welcome to TwinTube</h2>
-      <div class="modal-body">
-        <p style="font-size: 14px; color: var(--md-on-surface-variant);">
-          Join as a guest by entering a nickname, or sign in to save your identity:
-        </p>
-        <input type="text" id="nicknameInput" class="input-field" placeholder="e.g. Alex" maxlength="20" autofocus required>
-      </div>
-      <div class="modal-footer" style="flex-direction: column; gap: 8px;">
-        <button class="btn btn-primary" id="btnSaveNickname" style="width: 100%;">Join as Guest</button>
-        <button class="btn btn-secondary" id="btnOpenAuthFromNick" style="width: 100%;">Sign In / Create Account</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Client JavaScript Modules -->
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script type="module" src="/static/js/app.js"></script>
+  <!-- Landing Script -->
+  <script type="module" src="/static/js/landing.js"></script>
 </body>
 </html>

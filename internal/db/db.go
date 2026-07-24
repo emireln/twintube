@@ -1,4 +1,4 @@
-package main
+package db
 
 import (
 	"database/sql"
@@ -19,6 +19,34 @@ const (
 	DBTypePostgres DBType = "postgres"
 	DBTypeSQLite   DBType = "sqlite"
 )
+
+type User struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	AvatarURL    string    `json:"avatarUrl"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type ChatMessage struct {
+	Type      string `json:"type"`
+	Nickname  string `json:"nickname"`
+	Content   string `json:"content"`
+	IsSystem  bool   `json:"isSystem"`
+	Timestamp string `json:"timestamp"`
+}
+
+type PlaylistItem struct {
+	ID           string `json:"id"`
+	RoomID       string `json:"roomId"`
+	VideoID      string `json:"videoId"`
+	Title        string `json:"title"`
+	Author       string `json:"author"`
+	ThumbnailURL string `json:"thumbnailUrl"`
+	Position     int    `json:"position"`
+	AddedBy      string `json:"addedBy"`
+}
 
 type DB struct {
 	db     *sql.DB
@@ -98,7 +126,6 @@ func InitDB(defaultSQLitePath string) (*DB, error) {
 	return dbWrapper, nil
 }
 
-// Rebind translates '?' placeholders to PostgreSQL '$1, $2' if using Postgres
 func (d *DB) Rebind(query string) string {
 	if d.dbType != DBTypePostgres {
 		return query
@@ -222,7 +249,6 @@ func (d *DB) createTables() error {
 	return nil
 }
 
-// User Operations
 func (d *DB) CreateUser(u User) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -260,7 +286,6 @@ func (d *DB) GetUserByID(id string) (*User, error) {
 	return &u, nil
 }
 
-// SaveRoom saves or updates room state in DB
 func (d *DB) SaveRoom(roomID, hostID, videoID, status string, currentTime float64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -290,7 +315,6 @@ func (d *DB) SaveRoom(roomID, hostID, videoID, status string, currentTime float6
 	return err
 }
 
-// Chat Messages
 func (d *DB) SaveChatMessage(roomID, userID, nickname, content string, isSystem bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -330,7 +354,6 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 	return messages, nil
 }
 
-// Playlist Operations
 func (d *DB) SavePlaylistItem(item PlaylistItem) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

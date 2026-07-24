@@ -74,6 +74,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// serveLandingOrRoom serves landing page on '/' and watch room on '/room/{id}'
 func serveLandingOrRoom(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if path == "/" {

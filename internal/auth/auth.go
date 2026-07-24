@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"encoding/json"
@@ -11,25 +11,19 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+
+	"twintube/internal/db"
+	"twintube/internal/utils"
 )
 
 var jwtSecret []byte
 
-func initJWTSecret() {
+func InitJWTSecret() {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "twintube_default_super_secret_vps_key_change_me"
 	}
 	jwtSecret = []byte(secret)
-}
-
-type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	AvatarURL    string    `json:"avatarUrl"`
-	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type Claims struct {
@@ -50,26 +44,23 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token string  `json:"token"`
+	User  db.User `json:"user"`
 }
 
-// HashPassword hashes plaintext password using bcrypt
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	return string(bytes), err
 }
 
-// CheckPasswordHash compares plaintext password with hash
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-// GenerateJWTToken issues a signed JWT token
 func GenerateJWTToken(userID, username string) (string, error) {
 	if len(jwtSecret) == 0 {
-		initJWTSecret()
+		InitJWTSecret()
 	}
 
 	expirationTime := time.Now().Add(72 * time.Hour)
@@ -87,10 +78,9 @@ func GenerateJWTToken(userID, username string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
-// ParseJWTToken parses and validates a signed JWT token
 func ParseJWTToken(tokenString string) (*Claims, error) {
 	if len(jwtSecret) == 0 {
-		initJWTSecret()
+		InitJWTSecret()
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
@@ -111,8 +101,7 @@ func ParseJWTToken(tokenString string) (*Claims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
-// HTTP Auth Handlers
-func handleRegister(w http.ResponseWriter, r *http.Request) {
+func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -144,9 +133,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if username or email already exists
-	if Database != nil {
-		existing, _ := Database.GetUserByUsernameOrEmail(req.Username, req.Email)
+	if db.Database != nil {
+		existing, _ := db.Database.GetUserByUsernameOrEmail(req.Username, req.Email)
 		if existing != nil {
 			http.Error(w, `{"error":"Username or email is already registered"}`, http.StatusConflict)
 			return
@@ -159,8 +147,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := User{
-		ID:           GenerateRandomID(10),
+	user := db.User{
+		ID:           utils.GenerateRandomID(10),
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
@@ -168,8 +156,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    time.Now(),
 	}
 
-	if Database != nil {
-		if err := Database.CreateUser(user); err != nil {
+	if db.Database != nil {
+		if err := db.Database.CreateUser(user); err != nil {
 			http.Error(w, `{"error":"Failed to create user account"}`, http.StatusInternalServerError)
 			return
 		}
@@ -188,7 +176,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleLogin(w http.ResponseWriter, r *http.Request) {
+func HandleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
@@ -208,12 +196,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if Database == nil {
+	if db.Database == nil {
 		http.Error(w, `{"error":"Database unavailable"}`, http.StatusInternalServerError)
 		return
 	}
 
-	user, err := Database.GetUserByUsernameOrEmail(req.UsernameOrEmail, req.UsernameOrEmail)
+	user, err := db.Database.GetUserByUsernameOrEmail(req.UsernameOrEmail, req.UsernameOrEmail)
 	if err != nil || user == nil {
 		http.Error(w, `{"error":"Invalid username/email or password"}`, http.StatusUnauthorized)
 		return
@@ -237,7 +225,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleGetMe(w http.ResponseWriter, r *http.Request) {
+func HandleGetMe(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
@@ -251,12 +239,12 @@ func handleGetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if Database == nil {
+	if db.Database == nil {
 		http.Error(w, `{"error":"Database unavailable"}`, http.StatusInternalServerError)
 		return
 	}
 
-	user, err := Database.GetUserByID(claims.UserID)
+	user, err := db.Database.GetUserByID(claims.UserID)
 	if err != nil || user == nil {
 		http.Error(w, `{"error":"User not found"}`, http.StatusNotFound)
 		return
