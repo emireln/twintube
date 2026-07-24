@@ -29,15 +29,15 @@
     <!-- Inner Screen Border -->
     <rect x="74" y="174" width="302" height="192" rx="26" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.22" />
 
-    <!-- Centered Twin Play Triangle -->
-    <path d="M 212 232 L 272 270 L 212 308 Z" fill="#ffffff" />
+    <!-- Centered Play Triangle -->
+    <path d="M 206 240 L 256 270 L 206 300 Z" fill="#ffffff" />
 
-    <!-- Top-Right Sync Arc -->
-    <path d="M 225 198 A 72 72 0 0 1 326 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
-    <path d="M 326 278 L 340 254 L 312 254 Z" fill="#ffffff" />
+    <!-- Top-Right Sync Arc & Arrowhead -->
+    <path d="M 225 205 A 65 65 0 0 1 290 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+    <polyline points="274,254 290,270 306,254" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
 
-    <!-- Bottom-Left Sync Arc -->
-    <path d="M 225 342 A 72 72 0 0 1 124 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
-    <path d="M 124 262 L 110 286 L 138 286 Z" fill="#ffffff" />
+    <!-- Bottom-Left Sync Arc & Arrowhead -->
+    <path d="M 225 335 A 65 65 0 0 1 160 270" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+    <polyline points="144,286 160,270 176,286" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
   </g>
 </svg>
