@@ -1083,6 +1083,77 @@ body.theater-mode .reaction-chip img {
   max-width: 440px;
 }
 
+.room-config-video {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--md-outline);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room-config-video-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.room-config-video-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--md-on-surface-variant);
+}
+
+.room-config-video .btn {
+  align-self: flex-start;
+}
+
+.empty-player-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(122, 122, 255, 0.18), transparent 55%),
+    linear-gradient(180deg, #0c0e14 0%, #12151f 100%);
+  pointer-events: none;
+}
+
+.empty-player-overlay[hidden] {
+  display: none !important;
+}
+
+.empty-player-card {
+  max-width: 360px;
+  text-align: center;
+  color: #e8eaf2;
+}
+
+.empty-player-icon {
+  font-size: 48px;
+  color: #9aa3ff;
+  margin-bottom: 10px;
+}
+
+.empty-player-title {
+  margin: 0 0 8px;
+  font-family: var(--font-brand);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.empty-player-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #a8b0c4;
+}
+
 .room-perms-list {
   display: flex;
   flex-direction: column;
@@ -2532,6 +2603,18 @@ body.theater-mode .floating-reaction img {
 
 /* Room: phone-first layout — header becomes left drawer */
 @media (max-width: 900px) {
+  /* Inputs under 16px make mobile Safari/Chrome zoom the page on focus */
+  input.input-field,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
   body.room-body {
     --mobile-bar-h: 52px;
     --mobile-bottom-h: calc(56px + env(safe-area-inset-bottom, 0px));

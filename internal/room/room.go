@@ -144,13 +144,14 @@ var Manager = &RoomManager{
 }
 
 func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
+	starter := PickRandomStarter()
 	return &Room{
 		ID:     roomID,
 		Name:   name,
 		HostID: "",
 		State: VideoState{
-			VideoID:         "dQw4w9WgXcQ",
-			Title:           "Rick Astley - Never Gonna Give You Up",
+			VideoID:         starter.VideoID,
+			Title:           starter.Title,
 			Status:          "PAUSED",
 			CurrentTime:     0.0,
 			ServerTimestamp: time.Now().UnixNano() / 1e6,
@@ -223,11 +224,27 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 					room.PasswordHash = rec.PasswordHash
 					room.IsPrivate = rec.IsPrivate || rec.PasswordHash != ""
 					room.ExpiresAt = rec.ExpiresAt
-					if rec.CurrentVideoID != "" {
-						room.State.VideoID = rec.CurrentVideoID
+					prevShellID := room.State.VideoID
+					room.State.VideoID = rec.CurrentVideoID
+					if rec.CurrentVideoID == "" {
+						room.State.Title = ""
+						room.State.Platform = ""
+						room.State.SourceURL = ""
+						room.State.MediaKind = "vod"
+						room.State.Seekable = true
+					} else if title, ok := StarterTitle(rec.CurrentVideoID); ok {
+						room.State.Title = title
+						room.State.Platform = "youtube"
+						room.State.MediaKind = "vod"
+						room.State.Seekable = true
+					} else if rec.CurrentVideoID != prevShellID {
+						// DB has no title column — avoid showing the wrong starter name
+						room.State.Title = "Now playing"
 					}
 					if rec.CurrentStatus != "" {
 						room.State.Status = rec.CurrentStatus
+					} else if rec.CurrentVideoID == "" {
+						room.State.Status = "PAUSED"
 					}
 					room.State.CurrentTime = rec.CurrentTime
 					if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
@@ -651,6 +668,52 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		Timestamp: nowMs,
 	}
 	r.BroadcastRoomMeta()
+}
+
+// ClearCurrentVideo empties the player for everyone (host-only). Returns false if denied.
+func (r *Room) ClearCurrentVideo(from *Client) bool {
+	if from == nil || !from.IsHost {
+		return false
+	}
+
+	r.mu.Lock()
+	nowMs := time.Now().UnixNano() / 1e6
+	r.State.VideoID = ""
+	r.State.Title = ""
+	r.State.Status = "PAUSED"
+	r.State.CurrentTime = 0
+	r.State.ServerTimestamp = nowMs
+	r.State.Platform = ""
+	r.State.MediaKind = "vod"
+	r.State.SourceURL = ""
+	r.State.Seekable = true
+	stateCopy := r.State
+	r.resetSkipVotesLocked()
+	if db.Database != nil && r.OwnerID != "" {
+		_ = db.Database.SaveRoom(r.ID, r.HostID, "", "PAUSED", 0)
+	}
+	r.mu.Unlock()
+
+	statePayload := map[string]interface{}{
+		"videoId":         stateCopy.VideoID,
+		"title":           stateCopy.Title,
+		"status":          stateCopy.Status,
+		"currentTime":     stateCopy.CurrentTime,
+		"serverTimestamp": nowMs,
+		"platform":        stateCopy.Platform,
+		"mediaKind":       stateCopy.MediaKind,
+		"sourceUrl":       stateCopy.SourceURL,
+		"seekable":        stateCopy.Seekable,
+		"forceReload":     true,
+	}
+	raw, _ := json.Marshal(statePayload)
+	r.Broadcast <- WSMessage{
+		Action:    "STATE_UPDATE",
+		Payload:   raw,
+		Timestamp: nowMs,
+	}
+	r.BroadcastRoomMeta()
+	return true
 }
 
 func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem) {

@@ -90,6 +90,7 @@ twintube/
 | `STATE_UPDATE` | S→C | Authoritative video state |
 | `SYNC_REQUEST` | C→S | Force personal resync |
 | `VIDEO_REACTION` | C↔S | Allowlisted: `happy`, `energetic`, `stressed`, `tired`, `heart`, `lmao`, `popcorn`, `monkey-no-look` (`.webp`) |
+| `CLEAR_CURRENT_VIDEO` | C→S | Host-only; empty the current player (no video until someone adds one) |
 | `SET_ROOM_PERMISSIONS` | C→S | Host-only; open-by-default viewer flags |
 | `USER_LIST` / `TRANSFER_HOST` / `GRANT_COHOST` / `REVOKE_COHOST` | ↔ | Audience + roles |
 | `SUBMIT_MOMENT` / `APPROVE_MOMENT` / `REJECT_MOMENT` / `JUMP_TO_MOMENT` | ↔ | Timestamp moments |

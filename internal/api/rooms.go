@@ -93,7 +93,8 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 		rmRoom = h.Manager.CreateGuestRoom(roomID, req.Name, pwdHash, req.Password != "")
 	} else {
 		if db.Database != nil {
-			if err := db.Database.CreateRoomRecord(roomID, req.Name, userID, pwdHash, req.Password != "", expiresAt); err != nil {
+			starter := room.PickRandomStarter()
+			if err := db.Database.CreateRoomRecord(roomID, req.Name, userID, pwdHash, req.Password != "", expiresAt, starter.VideoID); err != nil {
 				http.Error(w, `{"error":"Failed to create room"}`, http.StatusInternalServerError)
 				return
 			}

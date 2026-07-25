@@ -809,6 +809,19 @@ class TwinTubeApp {
         close();
       });
     }
+
+    const btnClearVideo = document.getElementById('btnClearCurrentVideo');
+    if (btnClearVideo) {
+      btnClearVideo.addEventListener('click', () => {
+        if (!this.isHost) {
+          this.ui.showToast(t('permission_denied'));
+          return;
+        }
+        this.ws.sendAction('CLEAR_CURRENT_VIDEO');
+        this.ui.showToast(t('video_cleared'));
+        close();
+      });
+    }
   }
 
   initMomentsUI() {
@@ -932,7 +945,7 @@ class TwinTubeApp {
 
       const applyVideo = () => {
         if (payload.video) {
-          this.updateVideoMeta(payload.video.title, payload.video.status);
+          this.updateVideoMeta(payload.video.title ?? '', payload.video.status);
           this.syncLocalPresence(payload.video.videoId || '');
           if (this.player) {
             this.player.refreshSize();
@@ -956,11 +969,19 @@ class TwinTubeApp {
     });
 
     this.ws.on('STATE_UPDATE', (payload, timestamp) => {
-      this.updateVideoMeta(payload.title, payload.status);
+      this.updateVideoMeta(payload.title ?? '', payload.status);
       this.syncLocalPresence(payload.videoId || '');
       if (this.player) {
         const force = this.forceNextSync || !!payload.forceReload;
         this.forceNextSync = false;
+        if (!payload.videoId) {
+          this.player.applyServerState(
+            payload,
+            payload.serverTimestamp || timestamp,
+            { force: true, timeAlreadyAbsolute: true }
+          );
+          return;
+        }
         if (force && (payload.platform === 'youtube' || (!payload.platform && /^[a-zA-Z0-9_-]{11}$/.test(payload.videoId || '')))) {
           // Blank iframe from a hidden init won't recover via loadVideoById alone.
           const wrap = document.getElementById('playerWrapper');
@@ -1359,13 +1380,18 @@ class TwinTubeApp {
     const statusBadge = document.getElementById('statusBadge');
     const statusText = document.getElementById('statusText');
 
-    if (title) this.lastVideoTitle = title;
+    if (title !== undefined && title !== null) this.lastVideoTitle = title;
     if (status) this.lastVideoStatus = status;
 
-    if (videoTitle && title) {
-      videoTitle.textContent = title;
-    } else if (videoTitle && !title && !this.lastVideoTitle) {
-      videoTitle.textContent = t('sync_room_title');
+    if (videoTitle) {
+      if (title) {
+        videoTitle.textContent = title;
+      } else if (title === '') {
+        videoTitle.textContent = t('empty_player_title');
+        this.lastVideoTitle = '';
+      } else if (!this.lastVideoTitle) {
+        videoTitle.textContent = t('sync_room_title');
+      }
     }
 
     if (statusBadge && statusText) {

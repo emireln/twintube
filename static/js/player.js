@@ -13,7 +13,7 @@ export class VideoPlayer {
     this.mediaKind = 'vod';
     this.sourceUrl = '';
     this.seekable = true;
-    this.currentVideoId = 'dQw4w9WgXcQ';
+    this.currentVideoId = '';
     this.currentStatus = 'PAUSED';
     this.onLocalStateChange = onLocalStateChange;
     this.onVideoEnded = onVideoEnded;
@@ -25,6 +25,7 @@ export class VideoPlayer {
     this.remoteUpdateTimer = null;
     this.pendingLocalState = null;
     this.hls = null;
+    this.emptyOverlay = document.getElementById('emptyPlayerOverlay');
 
     this.initYouTubeAPI();
     this.initHTML5Player();
@@ -78,11 +79,12 @@ export class VideoPlayer {
       const rect = wrap ? wrap.getBoundingClientRect() : null;
       const width = Math.max(1, Math.round(rect?.width || this.ytContainer.clientWidth || 640));
       const height = Math.max(1, Math.round(rect?.height || this.ytContainer.clientHeight || 360));
+      const initialId = this.currentVideoId || undefined;
 
       this.ytPlayer = new window.YT.Player('ytPlayer', {
         height: String(height),
         width: String(width),
-        videoId: this.currentVideoId,
+        ...(initialId ? { videoId: initialId } : {}),
         playerVars: {
           autoplay: 0,
           controls: 1,
@@ -103,6 +105,8 @@ export class VideoPlayer {
                 pending.serverTimestamp,
                 pending.options || { force: true, timeAlreadyAbsolute: true }
               );
+            } else if (!this.currentVideoId) {
+              this.setEmptyPlayer(true);
             }
           },
           onStateChange: (event) => this.onYTStateChange(event)
@@ -110,6 +114,29 @@ export class VideoPlayer {
       });
     } catch (err) {
       console.warn('[PLAYER] Failed to instantiate YouTube player:', err);
+    }
+  }
+
+  setEmptyPlayer(empty) {
+    if (this.emptyOverlay) {
+      this.emptyOverlay.hidden = !empty;
+    }
+    if (empty) {
+      const ytEl = document.getElementById('ytPlayer');
+      if (ytEl) ytEl.style.display = 'none';
+      if (this.html5Player) {
+        this.html5Player.pause();
+        this.html5Player.removeAttribute('src');
+        this.html5Player.load?.();
+        this.html5Player.style.display = 'none';
+      }
+      if (this.genericPlayer) {
+        this.genericPlayer.removeAttribute('src');
+        this.genericPlayer.style.display = 'none';
+      }
+      this.destroyHls();
+      this.currentVideoId = '';
+      this.activePlatform = '';
     }
   }
 
@@ -235,9 +262,10 @@ export class VideoPlayer {
     if (ytEl) ytEl.style.display = platform === 'youtube' ? 'block' : 'none';
     if (this.html5Player) this.html5Player.style.display = html5 ? 'block' : 'none';
     if (this.genericPlayer) {
-      this.genericPlayer.style.display = (!html5 && platform !== 'youtube') ? 'block' : 'none';
+      this.genericPlayer.style.display = (!html5 && platform !== 'youtube' && platform) ? 'block' : 'none';
     }
     if (!html5) this.destroyHls();
+    if (platform) this.setEmptyPlayer(false);
   }
 
   detectPlatform(videoId) {
@@ -386,7 +414,17 @@ export class VideoPlayer {
 
     const force = !!options.force;
     const timeAlreadyAbsolute = !!options.timeAlreadyAbsolute;
-    const videoId = videoState.videoId || 'dQw4w9WgXcQ';
+    // Empty string is intentional (host cleared the player) — do not fall back to a default clip.
+    const videoId = typeof videoState.videoId === 'string' ? videoState.videoId : '';
+    if (!videoId) {
+      this.pendingServerState = null;
+      this.pendingLocalState = null;
+      this.currentStatus = 'PAUSED';
+      this.setEmptyPlayer(true);
+      this.updateLiveBadge();
+      return;
+    }
+
     const status = videoState.status || 'PAUSED';
     let expectedTime = typeof videoState.currentTime === 'number' ? videoState.currentTime : 0.0;
 
@@ -402,6 +440,7 @@ export class VideoPlayer {
     this.mediaKind = videoState.mediaKind || (platform === 'twitch' && String(videoId).startsWith('channel:') ? 'live' : 'vod');
     this.sourceUrl = videoState.sourceUrl || '';
     this.seekable = videoState.seekable !== false && this.mediaKind !== 'live';
+    this.setEmptyPlayer(false);
 
     if (platform === 'youtube' && (!this.ytPlayer || !this.isReady)) {
       this.pendingServerState = {
@@ -409,6 +448,10 @@ export class VideoPlayer {
         serverTimestamp: stamp,
         options: { force: true, timeAlreadyAbsolute: true }
       };
+      this.currentVideoId = videoId;
+      if (!this.ytPlayer && window.YT && window.YT.Player) {
+        this.createYTPlayer();
+      }
       return;
     }
 

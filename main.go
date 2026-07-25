@@ -624,6 +624,16 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s updated room permissions.", c.Nickname))
 		c.Room.BroadcastRoomMeta()
 
+	case "CLEAR_CURRENT_VIDEO":
+		if c.Room == nil {
+			return
+		}
+		if !c.Room.ClearCurrentVideo(c) {
+			sendError(c, "permission_denied")
+			return
+		}
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s cleared the current video.", c.Nickname))
+
 	case "TRANSFER_HOST":
 		if c.Room == nil || !c.IsHost {
 			sendError(c, "permission_denied")

@@ -145,6 +145,15 @@
           </div>
         </div>
 
+        <!-- Empty player (host cleared video / no media) -->
+        <div class="empty-player-overlay" id="emptyPlayerOverlay" hidden>
+          <div class="empty-player-card">
+            <span class="material-symbols-outlined empty-player-icon" aria-hidden="true">play_circle</span>
+            <h3 class="empty-player-title" data-i18n="empty_player_title">No video playing</h3>
+            <p class="empty-player-desc" data-i18n="empty_player_desc">Paste a link above or add a local file to start watching together.</p>
+          </div>
+        </div>
+
         <!-- Floating Reactions Overlay -->
         <div class="reaction-overlay" id="reactionOverlay"></div>
 
@@ -383,6 +392,15 @@
           <span data-i18n="perm_jump">Anyone can jump everyone to a moment</span>
           <input type="checkbox" id="permJump" checked>
         </label>
+      </div>
+      <div class="room-config-video">
+        <h3 class="room-config-video-title" data-i18n="room_video_section">Current video</h3>
+        <p class="room-config-video-desc" data-i18n="room_video_clear_desc">
+          Remove the video from the player and leave it empty until someone adds a new one. New rooms still start with a random starter video by default.
+        </p>
+        <button type="button" class="btn btn-secondary" id="btnClearCurrentVideo" data-i18n="clear_current_video">
+          Clear current video
+        </button>
       </div>
       <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
         <button class="btn btn-secondary" id="btnCloseRoomPerms" type="button" data-i18n="close">Close</button>

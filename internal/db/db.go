@@ -173,7 +173,7 @@ func (d *DB) createTables() error {
 				is_private BOOLEAN DEFAULT FALSE,
 				password_hash TEXT DEFAULT '',
 				host_id VARCHAR(64) NOT NULL,
-				current_video_id TEXT DEFAULT 'dQw4w9WgXcQ',
+				current_video_id TEXT DEFAULT '',
 				current_status VARCHAR(32) DEFAULT 'PAUSED',
 				"current_time" DOUBLE PRECISION DEFAULT 0.0,
 				updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -219,7 +219,7 @@ func (d *DB) createTables() error {
 				is_private INTEGER DEFAULT 0,
 				password_hash TEXT DEFAULT '',
 				host_id TEXT NOT NULL,
-				current_video_id TEXT DEFAULT 'dQw4w9WgXcQ',
+				current_video_id TEXT DEFAULT '',
 				current_status TEXT DEFAULT 'PAUSED',
 				current_time REAL DEFAULT 0.0,
 				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -680,7 +680,7 @@ type RoomRecord struct {
 	CreatedAt      time.Time  `db:"created_at"`
 }
 
-func (d *DB) CreateRoomRecord(id, name, ownerID, pwdHash string, isPrivate bool, expiresAt *time.Time) error {
+func (d *DB) CreateRoomRecord(id, name, ownerID, pwdHash string, isPrivate bool, expiresAt *time.Time, videoID string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -688,23 +688,26 @@ func (d *DB) CreateRoomRecord(id, name, ownerID, pwdHash string, isPrivate bool,
 	if hostID == "" {
 		hostID = "system"
 	}
+	if videoID == "" {
+		videoID = ""
+	}
 
 	var query string
 	if d.dbType == DBTypePostgres {
-		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7);`
+		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at, current_video_id, current_status)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`
 	} else {
 		isPrivInt := 0
 		if isPrivate {
 			isPrivInt = 1
 		}
-		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?);`
-		_, err := d.db.Exec(query, id, name, ownerID, hostID, pwdHash, isPrivInt, expiresAt)
+		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at, current_video_id, current_status)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
+		_, err := d.db.Exec(query, id, name, ownerID, hostID, pwdHash, isPrivInt, expiresAt, videoID, "PAUSED")
 		return err
 	}
 
-	_, err := d.db.Exec(query, id, name, ownerID, hostID, pwdHash, isPrivate, expiresAt)
+	_, err := d.db.Exec(query, id, name, ownerID, hostID, pwdHash, isPrivate, expiresAt, videoID, "PAUSED")
 	return err
 }
 
