@@ -27,17 +27,6 @@
     </form>
 
     <div class="nav-actions">
-      <!-- Buy Me A Coffee Icon Button -->
-      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="nav-icon-btn coffee-btn" id="btnCoffee" title="Buy me a coffee" data-i18n-title="support_coffee">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
-          <line x1="6" y1="1" x2="6" y2="4"/>
-          <line x1="10" y1="1" x2="10" y2="4"/>
-          <line x1="14" y1="1" x2="14" y2="4"/>
-        </svg>
-      </a>
-
       <!-- Theme Toggle -->
       <button class="nav-icon-btn" id="btnThemeToggle" data-i18n-title="theme_toggle" title="Toggle Light/Dark Theme">
         <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
@@ -53,7 +42,7 @@
       <!-- Room Code Badge & Copy Link Button Container -->
       <button class="room-chip" id="btnCopyRoom" title="Click to Copy Room Link" style="display: none;" data-i18n-title="copy_link_title">
         <span class="chip-label" data-i18n="room">Room:</span>
-        <code id="roomCodeText">------</code>
+        <code id="roomCodeText">--------</code>
         <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg>
       </button>
 
@@ -128,14 +117,11 @@
             <button class="reaction-btn" data-gif="energetic.webp" title="Energetic Reaction">
               <img src="/static/gifs/energetic.webp" alt="Energetic">
             </button>
-            <button class="reaction-btn" data-gif="calm.webp" title="Calm Reaction">
-              <img src="/static/gifs/calm.webp" alt="Calm">
+            <button class="reaction-btn" data-gif="tired.webp" title="Tired Reaction">
+              <img src="/static/gifs/tired.webp" alt="Tired">
             </button>
             <button class="reaction-btn" data-gif="stressed.webp" title="Stressed Reaction">
               <img src="/static/gifs/stressed.webp" alt="Stressed">
-            </button>
-            <button class="reaction-btn" data-gif="tired.webp" title="Tired Reaction">
-              <img src="/static/gifs/tired.webp" alt="Tired">
             </button>
           </div>
 
@@ -204,9 +190,6 @@
 
       <!-- Tab 2: Playlist Queue -->
       <div class="tab-content" id="queueTab">
-        <div class="queue-header-info">
-          <span>Queued Videos</span>
-        </div>
         <div class="queue-list" id="queueList"></div>
       </div>
 

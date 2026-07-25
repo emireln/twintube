@@ -87,6 +87,12 @@ func (r *Room) OwnerIDValue() string {
 	return r.OwnerID
 }
 
+func (r *Room) IsPersistent() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.OwnerID != ""
+}
+
 func (r *Room) IsExpired() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -105,49 +111,86 @@ var Manager = &RoomManager{
 	rooms: make(map[string]*Room),
 }
 
+func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
+	return &Room{
+		ID:     roomID,
+		Name:   name,
+		HostID: "",
+		State: VideoState{
+			VideoID:         "dQw4w9WgXcQ",
+			Title:           "Rick Astley - Never Gonna Give You Up",
+			Status:          "PAUSED",
+			CurrentTime:     0.0,
+			ServerTimestamp: time.Now().UnixNano() / 1e6,
+		},
+		Clients:    make(map[string]*Client),
+		Playlist:   make([]db.PlaylistItem, 0),
+		Register:   make(chan *Client),
+		Unregister: make(chan *Client),
+		Broadcast:  make(chan WSMessage, 64),
+	}
+}
+
+// CreateGuestRoom starts an in-memory-only room that is never persisted to the database.
+func (rm *RoomManager) CreateGuestRoom(roomID, name, passwordHash string, isPrivate bool) *Room {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	if room, exists := rm.rooms[roomID]; exists {
+		return room
+	}
+
+	if db.Database != nil {
+		_ = db.Database.DeleteEphemeralRoomData(roomID)
+	}
+
+	if name == "" {
+		name = "Room " + roomID
+	}
+
+	room := rm.newRoomShell(roomID, name)
+	room.OwnerID = ""
+	room.PasswordHash = passwordHash
+	room.IsPrivate = isPrivate
+	room.ExpiresAt = nil
+
+	rm.rooms[roomID] = room
+	go room.Run()
+	log.Printf("[ROOM] Created ephemeral guest room %s", roomID)
+	return room
+}
+
 func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
 	room, exists := rm.rooms[roomID]
 	if !exists {
-		room = &Room{
-			ID:     roomID,
-			Name:   "Room " + roomID,
-			HostID: "",
-			State: VideoState{
-				VideoID:         "dQw4w9WgXcQ",
-				Title:           "Rick Astley - Never Gonna Give You Up",
-				Status:          "PAUSED",
-				CurrentTime:     0.0,
-				ServerTimestamp: time.Now().UnixNano() / 1e6,
-			},
-			Clients:    make(map[string]*Client),
-			Playlist:   make([]db.PlaylistItem, 0),
-			Register:   make(chan *Client),
-			Unregister: make(chan *Client),
-			Broadcast:  make(chan WSMessage, 64),
-		}
+		room = rm.newRoomShell(roomID, "Room "+roomID)
 
 		if db.Database != nil {
 			if rec, err := db.Database.GetRoomByID(roomID); err == nil && rec != nil {
-				if rec.Name != "" {
-					room.Name = rec.Name
+				if rec.OwnerID != "" {
+					if rec.Name != "" {
+						room.Name = rec.Name
+					}
+					room.OwnerID = rec.OwnerID
+					room.PasswordHash = rec.PasswordHash
+					room.IsPrivate = rec.IsPrivate || rec.PasswordHash != ""
+					room.ExpiresAt = rec.ExpiresAt
+					if rec.CurrentVideoID != "" {
+						room.State.VideoID = rec.CurrentVideoID
+					}
+					if rec.CurrentStatus != "" {
+						room.State.Status = rec.CurrentStatus
+					}
+					room.State.CurrentTime = rec.CurrentTime
+					if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
+						room.Playlist = items
+					}
+				} else {
+					_ = db.Database.DeleteEphemeralRoomData(roomID)
 				}
-				room.OwnerID = rec.OwnerID
-				room.PasswordHash = rec.PasswordHash
-				room.IsPrivate = rec.IsPrivate || rec.PasswordHash != ""
-				room.ExpiresAt = rec.ExpiresAt
-				if rec.CurrentVideoID != "" {
-					room.State.VideoID = rec.CurrentVideoID
-				}
-				if rec.CurrentStatus != "" {
-					room.State.Status = rec.CurrentStatus
-				}
-				room.State.CurrentTime = rec.CurrentTime
-			}
-			if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
-				room.Playlist = items
 			}
 		}
 
@@ -186,6 +229,7 @@ func (r *Room) Run() {
 		case client := <-r.Unregister:
 			leftNickname := ""
 			newHostAlert := ""
+			destroyEphemeral := false
 
 			r.mu.Lock()
 			if _, ok := r.Clients[client.ID]; ok {
@@ -204,6 +248,10 @@ func (r *Room) Run() {
 						break
 					}
 				}
+
+				if len(r.Clients) == 0 && r.OwnerID == "" {
+					destroyEphemeral = true
+				}
 			}
 			r.mu.Unlock()
 
@@ -213,6 +261,15 @@ func (r *Room) Run() {
 				}
 				r.BroadcastSystemAlert(leftNickname + " left the room.")
 				r.BroadcastUserList()
+			}
+
+			if destroyEphemeral {
+				if db.Database != nil {
+					_ = db.Database.DeleteEphemeralRoomData(r.ID)
+				}
+				Manager.RemoveRoom(r.ID)
+				log.Printf("[ROOM] Destroyed ephemeral room %s", r.ID)
+				return
 			}
 
 		case message := <-r.Broadcast:
@@ -314,7 +371,7 @@ func (r *Room) SendInitState(client *Client) {
 		log.Printf("[ROOM %s] Failed to send INIT_STATE to %s (send buffer full)", r.ID, client.Nickname)
 	}
 
-	if db.Database != nil {
+	if db.Database != nil && r.OwnerID != "" {
 		if history, err := db.Database.LoadChatHistory(r.ID, 50); err == nil && len(history) > 0 {
 			rawHistory, _ := json.Marshal(history)
 			select {
@@ -364,7 +421,7 @@ func (r *Room) BroadcastSystemAlert(content string) {
 		Timestamp: time.Now().Format("15:04"),
 	}
 
-	if db.Database != nil {
+	if db.Database != nil && r.IsPersistent() {
 		_ = db.Database.SaveChatMessage(r.ID, "", "System", content, true)
 	}
 
@@ -390,7 +447,7 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 
 	stateCopy := r.State
 
-	if db.Database != nil {
+	if db.Database != nil && r.OwnerID != "" {
 		_ = db.Database.SaveRoom(r.ID, r.HostID, r.State.VideoID, r.State.Status, r.State.CurrentTime)
 	}
 	r.mu.Unlock()

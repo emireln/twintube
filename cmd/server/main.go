@@ -334,7 +334,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Timestamp: time.Now().Format("15:04"),
 		}
 
-		if db.Database != nil {
+		if db.Database != nil && c.Room != nil && c.Room.IsPersistent() {
 			_ = db.Database.SaveChatMessage(c.RoomID, c.UserID, c.Nickname, chatMsg.Content, false)
 		}
 
@@ -372,7 +372,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			AddedBy:      c.Nickname,
 		}
 		item, playlist := c.Room.AppendPlaylistItem(item)
-		if db.Database != nil {
+		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.SavePlaylistItem(item)
 		}
 
@@ -400,7 +400,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		if db.Database != nil {
+		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(targetItem.ID)
 		}
 		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title)
@@ -424,7 +424,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		removed, playlist := c.Room.RemovePlaylistItem(payload.ItemID)
-		if removed && db.Database != nil {
+		if removed && db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(payload.ItemID)
 		}
 
@@ -465,7 +465,6 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		allowed := map[string]bool{
 			"happy.webp":     true,
 			"energetic.webp": true,
-			"calm.webp":      true,
 			"stressed.webp":  true,
 			"tired.webp":     true,
 		}

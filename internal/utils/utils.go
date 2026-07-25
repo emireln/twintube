@@ -21,16 +21,36 @@ func GenerateRandomID(length int) string {
 	return hex.EncodeToString(bytes)
 }
 
-// GenerateRoomCode generates a user-friendly 6-character room code (e.g. "a7b9x2")
+// GenerateRoomCode generates a user-friendly 8-character room code (e.g. "a7b9x2kp")
 func GenerateRoomCode() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 6)
-	randBytes := make([]byte, 6)
+	const codeLen = 8
+	b := make([]byte, codeLen)
+	randBytes := make([]byte, codeLen)
 	rand.Read(randBytes)
 	for i := range b {
 		b[i] = charset[int(randBytes[i])%len(charset)]
 	}
 	return string(b)
+}
+
+var roomIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{4,32}$`)
+
+// IsValidRoomID validates user-supplied room codes.
+func IsValidRoomID(id string) bool {
+	return roomIDPattern.MatchString(strings.TrimSpace(id))
+}
+
+// SanitizeNickname trims and caps display names for chat/rooms.
+func SanitizeNickname(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	if len(name) > 25 {
+		name = name[:25]
+	}
+	return name
 }
 
 // ExtractYouTubeID parses various YouTube URL formats and extracts the 11-character video ID

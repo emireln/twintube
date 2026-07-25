@@ -37,8 +37,9 @@ class TwinTubeApp {
   authHeaders(json = false) {
     const headers = {};
     if (json) headers['Content-Type'] = 'application/json';
-    if (this.auth.isLoggedIn()) {
-      headers['Authorization'] = `Bearer ${this.auth.getToken()}`;
+    const token = this.auth.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
   }
@@ -150,6 +151,7 @@ class TwinTubeApp {
       btnTheaterMode.addEventListener('click', () => {
         document.body.classList.toggle('theater-mode');
         const isTheater = document.body.classList.contains('theater-mode');
+        btnTheaterMode.classList.toggle('is-active', isTheater);
         this.ui.showToast(isTheater ? 'Theater mode enabled' : 'Theater mode disabled');
       });
     }
@@ -158,6 +160,8 @@ class TwinTubeApp {
     const reactionButtons = document.querySelectorAll('#videoReactionBar .reaction-btn');
     reactionButtons.forEach(btn => {
       btn.addEventListener('click', () => {
+        btn.classList.add('is-active');
+        setTimeout(() => btn.classList.remove('is-active'), 250);
         const gif = btn.getAttribute('data-gif');
         if (gif) {
           this.ws.sendAction('VIDEO_REACTION', { reaction: gif });
@@ -203,7 +207,8 @@ class TwinTubeApp {
     if (btnEmojiPicker && emojiPicker && chatInput) {
       btnEmojiPicker.addEventListener('click', (e) => {
         e.stopPropagation();
-        emojiPicker.classList.toggle('active');
+        const isOpen = emojiPicker.classList.toggle('active');
+        btnEmojiPicker.classList.toggle('is-active', isOpen);
       });
 
       emojiPicker.addEventListener('click', (e) => {
@@ -212,11 +217,13 @@ class TwinTubeApp {
           chatInput.value += emoji;
           chatInput.focus();
           emojiPicker.classList.remove('active');
+          btnEmojiPicker.classList.remove('is-active');
         }
       });
 
       document.addEventListener('click', () => {
         emojiPicker.classList.remove('active');
+        btnEmojiPicker.classList.remove('is-active');
       });
     }
 
@@ -455,7 +462,7 @@ class TwinTubeApp {
   }
 
   renderFloatingReaction(reaction, nickname) {
-    const allowed = new Set(['happy.webp', 'energetic.webp', 'calm.webp', 'stressed.webp', 'tired.webp']);
+    const allowed = new Set(['happy.webp', 'energetic.webp', 'stressed.webp', 'tired.webp']);
     if (!allowed.has(reaction)) return;
 
     const overlay = document.getElementById('reactionOverlay');

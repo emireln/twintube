@@ -47,11 +47,15 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 
 	var userID string
 	authHeader := r.Header.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
+	hadAuth := strings.HasPrefix(authHeader, "Bearer ")
+	if hadAuth {
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		if claims, err := auth.ParseJWTToken(tokenStr); err == nil {
-			userID = claims.UserID
+		claims, err := auth.ParseJWTToken(tokenStr)
+		if err != nil {
+			http.Error(w, `{"error":"Invalid or expired token"}`, http.StatusUnauthorized)
+			return
 		}
+		userID = claims.UserID
 	}
 
 	roomID := utils.GenerateRoomCode()
@@ -75,26 +79,30 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 	}
 
 	// Only persist owned rooms for signed-in users; guests get ephemeral in-memory rooms.
-	if db.Database != nil && userID != "" {
-		if err := db.Database.CreateRoomRecord(roomID, req.Name, userID, pwdHash, req.Password != "", expiresAt); err != nil {
-			http.Error(w, `{"error":"Failed to create room"}`, http.StatusInternalServerError)
-			return
+	var rmRoom *room.Room
+	if userID == "" {
+		rmRoom = h.Manager.CreateGuestRoom(roomID, req.Name, pwdHash, req.Password != "")
+	} else {
+		if db.Database != nil {
+			if err := db.Database.CreateRoomRecord(roomID, req.Name, userID, pwdHash, req.Password != "", expiresAt); err != nil {
+				http.Error(w, `{"error":"Failed to create room"}`, http.StatusInternalServerError)
+				return
+			}
 		}
+		rmRoom = h.Manager.GetOrCreateRoom(roomID)
+		rmRoom.Name = req.Name
+		rmRoom.IsPrivate = req.Password != ""
+		rmRoom.OwnerID = userID
+		rmRoom.PasswordHash = pwdHash
+		rmRoom.ExpiresAt = expiresAt
 	}
-
-	rmRoom := h.Manager.GetOrCreateRoom(roomID)
-	rmRoom.Name = req.Name
-	rmRoom.IsPrivate = req.Password != ""
-	rmRoom.OwnerID = userID
-	rmRoom.PasswordHash = pwdHash
-	rmRoom.ExpiresAt = expiresAt
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(CreateRoomResponse{
 		RoomCode:  roomID,
 		URL:       "/room/" + roomID,
-		Name:      req.Name,
-		IsPrivate: req.Password != "",
+		Name:      rmRoom.Name,
+		IsPrivate: rmRoom.IsPrivate,
 	})
 }
 
@@ -163,6 +171,11 @@ func (h *RoomAPIHandler) HandleRoomInfo(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if !utils.IsValidRoomID(code) {
+		http.Error(w, `{"error":"Invalid room code"}`, http.StatusBadRequest)
+		return
+	}
+
 	rmRoom := h.Manager.GetOrCreateRoom(code)
 	w.Header().Set("Content-Type", "application/json")
 
@@ -202,6 +215,11 @@ func (h *RoomAPIHandler) HandleDeleteRoom(w http.ResponseWriter, r *http.Request
 
 	code := strings.TrimPrefix(r.URL.Path, "/api/rooms/")
 	code = strings.TrimSpace(code)
+
+	if !utils.IsValidRoomID(code) {
+		http.Error(w, `{"error":"Invalid room code"}`, http.StatusBadRequest)
+		return
+	}
 
 	if db.Database != nil {
 		if err := db.Database.DeleteOwnedRoom(code, claims.UserID); err != nil {

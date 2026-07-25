@@ -17,6 +17,7 @@ import (
 	"twintube/internal/auth"
 	"twintube/internal/db"
 	"twintube/internal/room"
+	"twintube/internal/security"
 	"twintube/internal/utils"
 	"twintube/internal/version"
 )
@@ -60,56 +61,50 @@ func main() {
 	}
 
 	auth.InitJWTSecret()
+	security.ValidateJWTSecret()
 
 	if _, err := db.InitDB(*dbPath); err != nil {
 		log.Fatalf("Fatal: Database initialization failed: %v", err)
 	}
 
+	authLimiter := security.NewRateLimiter(20, time.Minute)
+
 	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/static/", securityHeadersMiddleware(http.StripPrefix("/static/", fs)))
+	http.Handle("/static/", security.Middleware(http.StripPrefix("/static/", fs)))
 
 	apiHandler := api.NewRoomAPIHandler(room.Manager)
 
 	// Auth Routes
-	http.HandleFunc("/api/auth/register", auth.HandleRegister)
-	http.HandleFunc("/api/auth/login", auth.HandleLogin)
-	http.HandleFunc("/api/auth/me", auth.HandleGetMe)
-	http.HandleFunc("/api/auth/profile", auth.HandleUpdateProfile)
-	http.HandleFunc("/api/auth/password", auth.HandleChangePassword)
+	http.HandleFunc("/api/auth/register", security.Wrap(authLimiter.Middleware(auth.HandleRegister)))
+	http.HandleFunc("/api/auth/login", security.Wrap(authLimiter.Middleware(auth.HandleLogin)))
+	http.HandleFunc("/api/auth/me", security.Wrap(auth.HandleGetMe))
+	http.HandleFunc("/api/auth/profile", security.Wrap(auth.HandleUpdateProfile))
+	http.HandleFunc("/api/auth/password", security.Wrap(auth.HandleChangePassword))
 
 	// API Room & Metadata Routes
-	http.HandleFunc("/api/youtube/info", handleVideoInfo)
-	http.HandleFunc("/api/video/info", handleVideoInfo)
-	http.HandleFunc("/api/room/create", apiHandler.HandleCreateRoom)
-	http.HandleFunc("/api/rooms/mine", apiHandler.HandleMyRooms)
-	http.HandleFunc("/api/room/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/youtube/info", security.Wrap(handleVideoInfo))
+	http.HandleFunc("/api/video/info", security.Wrap(handleVideoInfo))
+	http.HandleFunc("/api/room/create", security.Wrap(apiHandler.HandleCreateRoom))
+	http.HandleFunc("/api/rooms/mine", security.Wrap(apiHandler.HandleMyRooms))
+	http.HandleFunc("/api/room/", security.Wrap(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/info") {
 			apiHandler.HandleRoomInfo(w, r)
 			return
 		}
 		http.NotFound(w, r)
-	})
-	http.HandleFunc("/api/rooms/", apiHandler.HandleDeleteRoom)
-	http.HandleFunc("/api/version", handleVersion)
+	}))
+	http.HandleFunc("/api/rooms/", security.Wrap(apiHandler.HandleDeleteRoom))
+	http.HandleFunc("/api/version", security.Wrap(handleVersion))
 
 	// WebSocket & SPA Routes
-	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/", serveLandingOrRoom)
+	http.HandleFunc("/ws", security.Wrap(handleWebSocket))
+	http.HandleFunc("/", security.Wrap(serveLandingOrRoom))
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("[SERVER] TwinTube v%s (%s) running at http://localhost:%d", version.Version, version.Commit, *port)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server stopped: %v", err)
 	}
-}
-
-func securityHeadersMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
-		next.ServeHTTP(w, r)
-	})
 }
 
 func checkWebSocketOrigin(r *http.Request) bool {
@@ -147,7 +142,6 @@ func allowedOrigins() []string {
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(map[string]string{
 		"version": version.Version,
 		"commit":  version.Commit,
@@ -321,9 +315,13 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		if payload.RoomID == "" {
-			payload.RoomID = "default"
+		payload.RoomID = strings.TrimSpace(payload.RoomID)
+		if payload.RoomID == "" || !utils.IsValidRoomID(payload.RoomID) {
+			sendError(c, "Invalid room ID.")
+			return
 		}
+
+		payload.Password = strings.TrimSpace(payload.Password)
 
 		c.IsGuest = true
 		if payload.Token != "" {
@@ -340,8 +338,8 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		if c.IsGuest {
-			if payload.Nickname != "" {
-				c.Nickname = payload.Nickname
+			if nick := utils.SanitizeNickname(payload.Nickname); nick != "" {
+				c.Nickname = nick
 			} else {
 				c.Nickname = "Guest_" + c.ID[:4]
 			}
@@ -349,11 +347,14 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 
 		if db.Database != nil {
 			if rec, err := db.Database.GetRoomByID(payload.RoomID); err == nil && rec != nil {
-				if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
+				if rec.OwnerID != "" && rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
 					_ = db.Database.DeleteOwnedRoom(rec.ID, rec.OwnerID)
 					room.Manager.RemoveRoom(rec.ID)
 					sendError(c, "This room has expired.")
 					return
+				}
+				if rec.OwnerID == "" {
+					_ = db.Database.DeleteEphemeralRoomData(payload.RoomID)
 				}
 			}
 		}
@@ -403,15 +404,20 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
+		content := strings.TrimSpace(payload.Content)
+		if len(content) > 500 {
+			content = content[:500]
+		}
+
 		chatMsg := db.ChatMessage{
 			Type:      "chat",
 			Nickname:  c.Nickname,
-			Content:   strings.TrimSpace(payload.Content),
+			Content:   content,
 			IsSystem:  false,
 			Timestamp: time.Now().Format("15:04"),
 		}
 
-		if db.Database != nil {
+		if db.Database != nil && c.Room != nil && c.Room.IsPersistent() {
 			_ = db.Database.SaveChatMessage(c.RoomID, c.UserID, c.Nickname, chatMsg.Content, false)
 		}
 
@@ -449,7 +455,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			AddedBy:      c.Nickname,
 		}
 		item, playlist := c.Room.AppendPlaylistItem(item)
-		if db.Database != nil {
+		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.SavePlaylistItem(item)
 		}
 
@@ -477,7 +483,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		if db.Database != nil {
+		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(targetItem.ID)
 		}
 		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title)
@@ -501,7 +507,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		removed, playlist := c.Room.RemovePlaylistItem(payload.ItemID)
-		if removed && db.Database != nil {
+		if removed && db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(payload.ItemID)
 		}
 
@@ -542,7 +548,6 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		allowed := map[string]bool{
 			"happy.webp":     true,
 			"energetic.webp": true,
-			"calm.webp":      true,
 			"stressed.webp":  true,
 			"tired.webp":     true,
 		}

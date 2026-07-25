@@ -17,17 +17,18 @@ class LandingApp {
   authHeaders(json = false) {
     const headers = {};
     if (json) headers['Content-Type'] = 'application/json';
-    if (this.auth.isLoggedIn()) {
-      headers['Authorization'] = `Bearer ${this.auth.getToken()}`;
+    const token = this.auth.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
   }
 
   async init() {
-    this.setupCreateRoom();
     this.setupJoinRoom();
     this.setupAuthUI();
     await this.auth.checkAuth();
+    this.setupCreateRoom();
     this.updateAuthNavUI();
 
     this.ui.initMyRoomsModal(
