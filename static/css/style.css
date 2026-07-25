@@ -999,6 +999,11 @@ body.theater-mode .player-wrapper {
   color: var(--md-badge-paused);
 }
 
+.badge-live {
+  background-color: rgba(217, 48, 37, 0.18);
+  color: #cf222e;
+}
+
 .badge-host {
   background-color: var(--md-primary-container);
   color: var(--md-on-primary-container);

@@ -376,12 +376,26 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Title       string  `json:"title"`
 			Status      string  `json:"status"`
 			CurrentTime float64 `json:"currentTime"`
+			Platform    string  `json:"platform"`
+			MediaKind   string  `json:"mediaKind"`
+			SourceURL   string  `json:"sourceUrl"`
+			Seekable    *bool   `json:"seekable"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return
 		}
 
-		c.Room.UpdateVideoState(payload.VideoID, payload.Status, payload.CurrentTime, payload.Title)
+		meta := room.MediaMeta{
+			Platform:  payload.Platform,
+			MediaKind: payload.MediaKind,
+			SourceURL: payload.SourceURL,
+		}
+		if payload.Seekable != nil {
+			meta.Seekable = *payload.Seekable
+		} else if payload.MediaKind != "live" {
+			meta.Seekable = true
+		}
+		c.Room.UpdateVideoState(payload.VideoID, payload.Status, payload.CurrentTime, payload.Title, meta)
 
 	case "CHAT_MESSAGE":
 		if c.Room == nil {
@@ -437,7 +451,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		title := info.Title
-		if t := strings.TrimSpace(payload.Title); t != "" && (info.Platform == "local" || info.Platform == "direct") {
+		if t := strings.TrimSpace(payload.Title); t != "" && (info.Platform == "local" || info.Platform == "direct" || info.Platform == "hls") {
 			if len(t) > 200 {
 				t = t[:200]
 			}
@@ -452,6 +466,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Author:       info.Author,
 			ThumbnailURL: info.ThumbnailURL,
 			AddedBy:      c.Nickname,
+			Platform:     info.Platform,
+			MediaKind:    info.MediaKind,
+			SourceURL:    info.SourceURL,
+			Seekable:     info.Seekable,
 		}
 		item, playlist := c.Room.AppendPlaylistItem(item)
 		if db.Database != nil && c.Room.IsPersistent() {
@@ -485,7 +503,12 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(targetItem.ID)
 		}
-		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title)
+		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title, room.MediaMeta{
+			Platform:  targetItem.Platform,
+			MediaKind: targetItem.MediaKind,
+			SourceURL: targetItem.SourceURL,
+			Seekable:  targetItem.Seekable,
+		})
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("Now playing: '%s'", targetItem.Title))
 
 		raw, _ := json.Marshal(playlist)
@@ -593,6 +616,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			"currentTime":     c.Room.GetCalculatedTime(),
 			"serverTimestamp": nowMs,
 			"forceReload":     true,
+			"platform":        state.Platform,
+			"mediaKind":       state.MediaKind,
+			"sourceUrl":       state.SourceURL,
+			"seekable":        state.Seekable,
 		}
 
 		raw, _ := json.Marshal(statePayload)

@@ -133,6 +133,10 @@
               <span class="badge-dot"></span>
               <span id="statusText" data-i18n="status_paused">PAUSED</span>
             </span>
+            <span class="badge badge-live" id="liveBadge" style="display: none;">
+              <span class="badge-dot"></span>
+              <span data-i18n="live_badge">LIVE</span>
+            </span>
             <span class="badge badge-host" id="hostBadge" style="display: none;">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
               <span data-i18n="host_badge">Host</span>
@@ -440,6 +444,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Client JavaScript Modules -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <script type="module" src="/static/js/app.js"></script>
 </body>

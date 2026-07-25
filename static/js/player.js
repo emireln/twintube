@@ -9,7 +9,10 @@ export class VideoPlayer {
     this.genericPlayer = document.getElementById('genericPlayer');
     this.ytContainer = document.getElementById('ytPlayer');
 
-    this.activePlatform = 'youtube'; // 'youtube', 'direct', 'vimeo', 'twitch', 'generic'
+    this.activePlatform = 'youtube';
+    this.mediaKind = 'vod';
+    this.sourceUrl = '';
+    this.seekable = true;
     this.currentVideoId = 'dQw4w9WgXcQ';
     this.currentStatus = 'PAUSED';
     this.onLocalStateChange = onLocalStateChange;
@@ -21,9 +24,23 @@ export class VideoPlayer {
     this.pendingServerState = null;
     this.remoteUpdateTimer = null;
     this.pendingLocalState = null;
+    this.hls = null;
 
     this.initYouTubeAPI();
     this.initHTML5Player();
+  }
+
+  usesHtml5Surface(platform = this.activePlatform) {
+    return platform === 'direct' || platform === 'local' || platform === 'hls';
+  }
+
+  getPlaybackMeta() {
+    return {
+      platform: this.activePlatform,
+      mediaKind: this.mediaKind || 'vod',
+      sourceUrl: this.sourceUrl || '',
+      seekable: this.seekable !== false
+    };
   }
 
   initYouTubeAPI() {
@@ -74,22 +91,29 @@ export class VideoPlayer {
     if (!this.html5Player) return;
 
     this.html5Player.addEventListener('play', () => {
-      if (this.activePlatform !== 'direct' || this.isRemoteUpdate) return;
+      if (!this.usesHtml5Surface() || this.isRemoteUpdate) return;
       this.currentStatus = 'PLAYING';
       this.onLocalStateChange('PLAYING', this.html5Player.currentTime, this.currentVideoId);
     });
 
     this.html5Player.addEventListener('pause', () => {
-      if (this.activePlatform !== 'direct' || this.isRemoteUpdate) return;
+      if (!this.usesHtml5Surface() || this.isRemoteUpdate) return;
       this.currentStatus = 'PAUSED';
       this.onLocalStateChange('PAUSED', this.html5Player.currentTime, this.currentVideoId);
     });
 
     this.html5Player.addEventListener('ended', () => {
-      if (this.activePlatform !== 'direct') return;
+      if (!this.usesHtml5Surface() || this.mediaKind === 'live') return;
       this.currentStatus = 'PAUSED';
       this.onVideoEnded();
     });
+  }
+
+  destroyHls() {
+    if (this.hls) {
+      try { this.hls.destroy(); } catch (_) { /* ignore */ }
+      this.hls = null;
+    }
   }
 
   markRemoteUpdate(durationMs = 1200) {
@@ -131,28 +155,129 @@ export class VideoPlayer {
 
   switchPlatform(platform) {
     this.activePlatform = platform;
+    const html5 = this.usesHtml5Surface(platform);
 
     const ytEl = document.getElementById('ytPlayer');
     if (ytEl) ytEl.style.display = platform === 'youtube' ? 'block' : 'none';
-    if (this.html5Player) this.html5Player.style.display = platform === 'direct' ? 'block' : 'none';
-    if (this.genericPlayer) this.genericPlayer.style.display = (platform !== 'youtube' && platform !== 'direct') ? 'block' : 'none';
+    if (this.html5Player) this.html5Player.style.display = html5 ? 'block' : 'none';
+    if (this.genericPlayer) {
+      this.genericPlayer.style.display = (!html5 && platform !== 'youtube') ? 'block' : 'none';
+    }
+    if (!html5) this.destroyHls();
   }
 
   detectPlatform(videoId) {
-    if (isLocalVideoId(videoId)) return 'direct';
-    if (videoId.startsWith('http://') || videoId.startsWith('https://') || videoId.endsWith('.mp4') || videoId.endsWith('.webm')) {
+    if (isLocalVideoId(videoId)) return 'local';
+    if (typeof videoId === 'string' && videoId.includes('.m3u8')) return 'hls';
+    if (typeof videoId === 'string' && (videoId.startsWith('vod:') || videoId.startsWith('channel:'))) return 'twitch';
+    if (typeof videoId === 'string' && videoId.includes('|')) return 'peertube';
+    if (typeof videoId === 'string' && (videoId.startsWith('http://') || videoId.startsWith('https://'))) {
       if (videoId.includes('vimeo.com')) return 'vimeo';
       if (videoId.includes('twitch.tv')) return 'twitch';
+      if (videoId.includes('dailymotion.com') || videoId.includes('dai.ly')) return 'dailymotion';
+      if (videoId.includes('streamable.com')) return 'streamable';
+      if (/\.(mp4|webm|ogg)(\?|$)/i.test(videoId)) return 'direct';
       return 'direct';
     }
     return 'youtube';
   }
 
-  resolveDirectSrc(videoId) {
+  resolvePlatform(videoState, videoId) {
+    const fromServer = (videoState && videoState.platform) || '';
+    if (fromServer) return fromServer;
+    return this.detectPlatform(videoId);
+  }
+
+  resolveDirectSrc(videoId, sourceUrl = '') {
     if (isLocalVideoId(videoId)) {
       return getLocalBlobUrl(videoId);
     }
+    if (sourceUrl && (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://') || sourceUrl.startsWith('blob:'))) {
+      return sourceUrl;
+    }
     return videoId;
+  }
+
+  buildEmbedUrl(platform, videoId, sourceUrl = '') {
+    const parent = encodeURIComponent(window.location.hostname || 'localhost');
+    if (sourceUrl && sourceUrl.includes('HOSTNAME')) {
+      return sourceUrl.replace(/HOSTNAME/g, window.location.hostname || 'localhost');
+    }
+    if (platform === 'vimeo') {
+      const match = String(videoId).match(/(?:vimeo\.com\/(?:video\/)?)?([0-9]+)/);
+      const vimeoId = match ? match[1] : videoId;
+      return `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
+    }
+    if (platform === 'twitch') {
+      if (String(videoId).startsWith('channel:')) {
+        return `https://player.twitch.tv/?channel=${encodeURIComponent(videoId.slice(8))}&parent=${parent}`;
+      }
+      const vodId = String(videoId).startsWith('vod:') ? videoId.slice(4) : videoId;
+      return `https://player.twitch.tv/?video=${encodeURIComponent(vodId)}&parent=${parent}`;
+    }
+    if (platform === 'dailymotion') {
+      return `https://www.dailymotion.com/embed/video/${encodeURIComponent(videoId)}?autoplay=1`;
+    }
+    if (platform === 'streamable') {
+      return `https://streamable.com/e/${encodeURIComponent(videoId)}`;
+    }
+    if (platform === 'peertube') {
+      const parts = String(videoId).split('|');
+      if (parts.length === 2) {
+        return `https://${parts[0]}/videos/embed/${parts[1]}`;
+      }
+    }
+    return sourceUrl || videoId;
+  }
+
+  applyHtml5Playback(src, status, expectedTime, needsLoad, seekable) {
+    if (!this.html5Player || !src) return;
+
+    const apply = () => {
+      try {
+        if (seekable !== false && this.mediaKind !== 'live') {
+          const drift = Math.abs((this.html5Player.currentTime || 0) - expectedTime);
+          if (drift > this.syncThreshold || needsLoad) {
+            this.html5Player.currentTime = Math.max(0, expectedTime);
+          }
+        } else if (this.mediaKind === 'live' && typeof this.html5Player.seekable?.end === 'function') {
+          try {
+            const end = this.html5Player.seekable.end(0);
+            if (Number.isFinite(end) && end > 0) {
+              this.html5Player.currentTime = Math.max(0, end - 1);
+            }
+          } catch (_) { /* ignore */ }
+        }
+      } catch (_) { /* ignore seek before ready */ }
+
+      if (status === 'PLAYING') {
+        this.html5Player.play().catch(() => {});
+      } else {
+        this.html5Player.pause();
+      }
+    };
+
+    if (this.activePlatform === 'hls' && window.Hls && window.Hls.isSupported()) {
+      if (needsLoad || !this.hls || this._hlsSrc !== src) {
+        this.destroyHls();
+        this.hls = new window.Hls();
+        this._hlsSrc = src;
+        this.hls.loadSource(src);
+        this.hls.attachMedia(this.html5Player);
+        this.hls.on(window.Hls.Events.MANIFEST_PARSED, apply);
+      } else {
+        apply();
+      }
+      return;
+    }
+
+    if (this.html5Player.src !== src) {
+      this.destroyHls();
+      this.html5Player.src = src;
+      this.html5Player.addEventListener('loadedmetadata', apply, { once: true });
+    } else {
+      apply();
+    }
   }
 
   /** Called after a peer selects the matching local file. */
@@ -199,11 +324,14 @@ export class VideoPlayer {
       }
     }
 
-    const platform = this.detectPlatform(videoId);
+    const platform = this.resolvePlatform(videoState, videoId);
+    this.mediaKind = videoState.mediaKind || (platform === 'twitch' && String(videoId).startsWith('channel:') ? 'live' : 'vod');
+    this.sourceUrl = videoState.sourceUrl || '';
+    this.seekable = videoState.seekable !== false && this.mediaKind !== 'live';
 
     if (platform === 'youtube' && (!this.ytPlayer || !this.isReady)) {
       this.pendingServerState = {
-        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp },
+        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp, platform, mediaKind: this.mediaKind, sourceUrl: this.sourceUrl, seekable: this.seekable },
         serverTimestamp: stamp,
         options: { force: true, timeAlreadyAbsolute: true }
       };
@@ -212,11 +340,11 @@ export class VideoPlayer {
 
     if (isLocalVideoId(videoId) && !getLocalBlobUrl(videoId)) {
       this.pendingLocalState = {
-        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp },
+        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp, platform: 'local', mediaKind: this.mediaKind, seekable: this.seekable },
         serverTimestamp: stamp,
         options: { force: true, timeAlreadyAbsolute: true }
       };
-      this.switchPlatform('direct');
+      this.switchPlatform('local');
       this.currentVideoId = videoId;
       this.currentStatus = status;
       if (typeof this.onNeedLocalFile === 'function') {
@@ -237,10 +365,11 @@ export class VideoPlayer {
     this.currentVideoId = videoId;
 
     if (platform === 'youtube' && this.ytPlayer && this.isReady) {
+      const allowSeek = this.seekable;
       if (needsLoad) {
         this.ytPlayer.loadVideoById({
           videoId,
-          startSeconds: Math.max(0, expectedTime)
+          startSeconds: allowSeek ? Math.max(0, expectedTime) : 0
         });
         if (status !== 'PLAYING') {
           setTimeout(() => {
@@ -254,7 +383,7 @@ export class VideoPlayer {
         const playerTime = this.ytPlayer.getCurrentTime ? this.ytPlayer.getCurrentTime() : 0;
         const drift = Math.abs(playerTime - expectedTime);
 
-        if (drift > this.syncThreshold) {
+        if (allowSeek && drift > this.syncThreshold) {
           this.ytPlayer.seekTo(expectedTime, true);
         }
 
@@ -270,52 +399,32 @@ export class VideoPlayer {
           }
         }
       }
-    } else if (platform === 'direct' && this.html5Player) {
-      const src = this.resolveDirectSrc(videoId);
+    } else if (this.usesHtml5Surface(platform) && this.html5Player) {
+      const src = this.resolveDirectSrc(videoId, this.sourceUrl);
       if (!src) return;
-
-      const applyHtml5 = () => {
-        try {
-          const drift = Math.abs((this.html5Player.currentTime || 0) - expectedTime);
-          if (drift > this.syncThreshold || needsLoad) {
-            this.html5Player.currentTime = Math.max(0, expectedTime);
-          }
-        } catch (_) { /* ignore seek before ready */ }
-
-        if (status === 'PLAYING') {
-          this.html5Player.play().catch(() => {});
-        } else {
-          this.html5Player.pause();
-        }
-      };
-
-      if (this.html5Player.src !== src) {
-        this.html5Player.src = src;
-        this.html5Player.addEventListener('loadedmetadata', applyHtml5, { once: true });
-      } else {
-        applyHtml5();
-      }
+      this.applyHtml5Playback(src, status, expectedTime, needsLoad, this.seekable);
     } else if (this.genericPlayer) {
-      let embedUrl = videoId;
-      if (platform === 'vimeo') {
-        const match = videoId.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
-        const vimeoId = match ? match[1] : videoId;
-        embedUrl = `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
-      } else if (platform === 'twitch') {
-        embedUrl = `https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}`;
-      }
-
-      if (this.genericPlayer.src !== embedUrl) {
+      const embedUrl = this.buildEmbedUrl(platform, videoId, this.sourceUrl);
+      if (embedUrl && this.genericPlayer.src !== embedUrl) {
         this.genericPlayer.src = embedUrl;
       }
     }
+
+    this.updateLiveBadge();
+  }
+
+  updateLiveBadge() {
+    const badge = document.getElementById('liveBadge');
+    if (!badge) return;
+    const live = this.mediaKind === 'live';
+    badge.style.display = live ? 'inline-flex' : 'none';
   }
 
   getCurrentTime() {
     if (this.activePlatform === 'youtube' && this.ytPlayer && this.ytPlayer.getCurrentTime) {
       return this.ytPlayer.getCurrentTime();
     }
-    if (this.activePlatform === 'direct' && this.html5Player) {
+    if (this.usesHtml5Surface() && this.html5Player) {
       return this.html5Player.currentTime || 0.0;
     }
     return 0.0;

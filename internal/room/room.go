@@ -3,6 +3,7 @@ package room
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,10 @@ type VideoState struct {
 	Status          string  `json:"status"`
 	CurrentTime     float64 `json:"currentTime"`
 	ServerTimestamp int64   `json:"serverTimestamp"`
+	Platform        string  `json:"platform,omitempty"`
+	MediaKind       string  `json:"mediaKind,omitempty"`
+	SourceURL       string  `json:"sourceUrl,omitempty"`
+	Seekable        bool    `json:"seekable"`
 }
 
 type UserSummary struct {
@@ -134,6 +139,9 @@ func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 			Status:          "PAUSED",
 			CurrentTime:     0.0,
 			ServerTimestamp: time.Now().UnixNano() / 1e6,
+			Platform:        "youtube",
+			MediaKind:       "vod",
+			Seekable:        true,
 		},
 		Clients:    make(map[string]*Client),
 		Playlist:   make([]db.PlaylistItem, 0),
@@ -392,6 +400,10 @@ func (r *Room) SendInitState(client *Client) {
 			"status":          r.State.Status,
 			"currentTime":     calculatedTime,
 			"serverTimestamp": nowMs,
+			"platform":        r.State.Platform,
+			"mediaKind":       r.State.MediaKind,
+			"sourceUrl":       r.State.SourceURL,
+			"seekable":        r.State.Seekable,
 		},
 		"playlist": playlist,
 		"users":    r.getUserListUnsafe(),
@@ -483,9 +495,17 @@ func (r *Room) BroadcastSystemAlert(content string) {
 	})
 }
 
-func (r *Room) UpdateVideoState(videoId string, status string, currentTime float64, title string) {
+type MediaMeta struct {
+	Platform  string
+	MediaKind string
+	SourceURL string
+	Seekable  bool
+}
+
+func (r *Room) UpdateVideoState(videoId string, status string, currentTime float64, title string, meta MediaMeta) {
 	r.mu.Lock()
 	nowMs := time.Now().UnixNano() / 1e6
+	prevID := r.State.VideoID
 	if videoId != "" {
 		r.State.VideoID = videoId
 	}
@@ -494,6 +514,36 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 	r.State.ServerTimestamp = nowMs
 	if title != "" {
 		r.State.Title = title
+	}
+	if meta.Platform != "" {
+		r.State.Platform = meta.Platform
+		r.State.MediaKind = meta.MediaKind
+		if r.State.MediaKind == "" {
+			r.State.MediaKind = "vod"
+		}
+		r.State.SourceURL = meta.SourceURL
+		r.State.Seekable = meta.Seekable || r.State.MediaKind != "live"
+		if meta.MediaKind == "live" {
+			r.State.Seekable = false
+		}
+	} else if videoId != "" && videoId != prevID {
+		if strings.HasPrefix(videoId, "local:") {
+			r.State.Platform = "local"
+		} else if strings.HasPrefix(videoId, "vod:") || strings.HasPrefix(videoId, "channel:") {
+			r.State.Platform = "twitch"
+			if strings.HasPrefix(videoId, "channel:") {
+				r.State.MediaKind = "live"
+				r.State.Seekable = false
+			}
+		} else if r.State.Platform == "" {
+			r.State.Platform = "youtube"
+		}
+		if r.State.MediaKind == "" {
+			r.State.MediaKind = "vod"
+		}
+		if r.State.MediaKind != "live" {
+			r.State.Seekable = true
+		}
 	}
 
 	stateCopy := r.State
@@ -509,6 +559,10 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		"status":          stateCopy.Status,
 		"currentTime":     stateCopy.CurrentTime,
 		"serverTimestamp": nowMs,
+		"platform":        stateCopy.Platform,
+		"mediaKind":       stateCopy.MediaKind,
+		"sourceUrl":       stateCopy.SourceURL,
+		"seekable":        stateCopy.Seekable,
 	}
 
 	raw, _ := json.Marshal(statePayload)

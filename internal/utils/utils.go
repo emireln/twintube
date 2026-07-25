@@ -78,59 +78,37 @@ type VideoInfo struct {
 	Title        string `json:"title"`
 	Author       string `json:"author"`
 	ThumbnailURL string `json:"thumbnailUrl"`
+	MediaKind    string `json:"mediaKind"`
+	SourceURL    string `json:"sourceUrl"`
+	Seekable     bool   `json:"seekable"`
 }
 
-// ExtractVideoInfo parses YouTube, Vimeo, Twitch, or Direct video URLs
+func finishVideoInfo(info *VideoInfo, source string) *VideoInfo {
+	if info.MediaKind == "" {
+		info.MediaKind = "vod"
+	}
+	if info.SourceURL == "" {
+		info.SourceURL = source
+	}
+	if info.MediaKind == "live" {
+		info.Seekable = false
+	} else {
+		info.Seekable = true
+	}
+	return info
+}
+
+// ExtractVideoInfo parses YouTube, Vimeo, Twitch, Dailymotion, Streamable,
+// PeerTube, HLS, direct progressive, or local video identities.
 func ExtractVideoInfo(input string) (*VideoInfo, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, fmt.Errorf("empty video input")
 	}
-
-	// 1. YouTube check
-	if ytID, err := ExtractYouTubeID(input); err == nil && ytID != "" {
-		meta, _ := FetchYouTubeMetadata(ytID)
-		return &VideoInfo{
-			Platform:     "youtube",
-			VideoID:      ytID,
-			EmbedURL:     fmt.Sprintf("https://www.youtube.com/embed/%s?enablejsapi=1&autoplay=1", ytID),
-			Title:        meta.Title,
-			Author:       meta.AuthorName,
-			ThumbnailURL: meta.ThumbnailURL,
-		}, nil
-	}
-
-	// 2. Vimeo (vimeo.com/12345678)
-	reVimeo := regexp.MustCompile(`vimeo\.com\/(?:video\/)?([0-9]+)`)
-	if matches := reVimeo.FindStringSubmatch(input); len(matches) > 1 {
-		vimeoID := matches[1]
-		return &VideoInfo{
-			Platform:     "vimeo",
-			VideoID:      vimeoID,
-			EmbedURL:     fmt.Sprintf("https://player.vimeo.com/video/%s?autoplay=1", vimeoID),
-			Title:        "Vimeo Video (" + vimeoID + ")",
-			Author:       "Vimeo",
-			ThumbnailURL: "",
-		}, nil
-	}
-
-	// 3. Twitch (twitch.tv/videos/12345)
-	reTwitch := regexp.MustCompile(`twitch\.tv\/videos\/([0-9]+)`)
-	if matches := reTwitch.FindStringSubmatch(input); len(matches) > 1 {
-		twitchID := matches[1]
-		return &VideoInfo{
-			Platform:     "twitch",
-			VideoID:      twitchID,
-			EmbedURL:     fmt.Sprintf("https://player.twitch.tv/?video=%s&parent=localhost", twitchID),
-			Title:        "Twitch Video (" + twitchID + ")",
-			Author:       "Twitch",
-			ThumbnailURL: "",
-		}, nil
-	}
-
-	// 4. Local file identity (client-only bytes; server stores hash for sync)
-	// Formats: local:<hex> | local://<hex>
+	source := input
 	lower := strings.ToLower(input)
+
+	// Local file identity
 	if strings.HasPrefix(lower, "local://") || strings.HasPrefix(lower, "local:") {
 		id := strings.TrimSpace(input)
 		id = strings.TrimPrefix(id, "local://")
@@ -143,29 +121,171 @@ func ExtractVideoInfo(input string) (*VideoInfo, error) {
 			return nil, fmt.Errorf("invalid local video id")
 		}
 		videoID := "local:" + id
-		return &VideoInfo{
-			Platform:     "local",
-			VideoID:      videoID,
-			EmbedURL:     videoID,
-			Title:        "Local video",
-			Author:       "Local file",
-			ThumbnailURL: "",
-		}, nil
+		return finishVideoInfo(&VideoInfo{
+			Platform: "local",
+			VideoID:  videoID,
+			EmbedURL: videoID,
+			Title:    "Local video",
+			Author:   "Local file",
+			MediaKind: "vod",
+		}, source), nil
 	}
 
-	// 5. Direct Video URL (.mp4, .webm, .ogg, .m3u8)
-	if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") || strings.HasSuffix(lower, ".ogg") || strings.HasSuffix(lower, ".m3u8") || strings.HasPrefix(lower, "http") {
+	// YouTube
+	if ytID, err := ExtractYouTubeID(input); err == nil && ytID != "" {
+		meta, _ := FetchYouTubeMetadata(ytID)
+		kind := "vod"
+		if strings.Contains(lower, "/live/") || strings.Contains(lower, "live=1") {
+			kind = "live"
+		}
+		return finishVideoInfo(&VideoInfo{
+			Platform:     "youtube",
+			VideoID:      ytID,
+			EmbedURL:     fmt.Sprintf("https://www.youtube.com/embed/%s?enablejsapi=1&autoplay=1", ytID),
+			Title:        meta.Title,
+			Author:       meta.AuthorName,
+			ThumbnailURL: meta.ThumbnailURL,
+			MediaKind:    kind,
+		}, source), nil
+	}
+
+	// Vimeo
+	reVimeo := regexp.MustCompile(`vimeo\.com\/(?:video\/)?([0-9]+)`)
+	if matches := reVimeo.FindStringSubmatch(input); len(matches) > 1 {
+		vimeoID := matches[1]
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "vimeo",
+			VideoID:   vimeoID,
+			EmbedURL:  fmt.Sprintf("https://player.vimeo.com/video/%s?autoplay=1", vimeoID),
+			Title:     "Vimeo Video (" + vimeoID + ")",
+			Author:    "Vimeo",
+			MediaKind: "vod",
+		}, source), nil
+	}
+
+	// Twitch VOD
+	reTwitchVOD := regexp.MustCompile(`twitch\.tv\/videos\/([0-9]+)`)
+	if matches := reTwitchVOD.FindStringSubmatch(input); len(matches) > 1 {
+		twitchID := matches[1]
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "twitch",
+			VideoID:   "vod:" + twitchID,
+			EmbedURL:  fmt.Sprintf("https://player.twitch.tv/?video=%s&parent=HOSTNAME", twitchID),
+			Title:     "Twitch Video (" + twitchID + ")",
+			Author:    "Twitch",
+			MediaKind: "vod",
+		}, source), nil
+	}
+
+	// Twitch live channel
+	reTwitchChan := regexp.MustCompile(`(?:www\.)?twitch\.tv\/([a-zA-Z0-9_]{3,25})\/?(?:\?.*)?$`)
+	if matches := reTwitchChan.FindStringSubmatch(input); len(matches) > 1 {
+		ch := strings.ToLower(matches[1])
+		reserved := map[string]bool{"videos": true, "directory": true, "downloads": true, "jobs": true, "p": true, "settings": true}
+		if !reserved[ch] {
+			return finishVideoInfo(&VideoInfo{
+				Platform:  "twitch",
+				VideoID:   "channel:" + ch,
+				EmbedURL:  fmt.Sprintf("https://player.twitch.tv/?channel=%s&parent=HOSTNAME", ch),
+				Title:     "Twitch Live: " + ch,
+				Author:    "Twitch",
+				MediaKind: "live",
+			}, source), nil
+		}
+	}
+
+	// Dailymotion
+	reDM := regexp.MustCompile(`(?:dailymotion\.com\/(?:video|embed\/video)\/|dai\.ly\/)([a-zA-Z0-9]+)`)
+	if matches := reDM.FindStringSubmatch(input); len(matches) > 1 {
+		id := matches[1]
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "dailymotion",
+			VideoID:   id,
+			EmbedURL:  fmt.Sprintf("https://www.dailymotion.com/embed/video/%s", id),
+			Title:     "Dailymotion (" + id + ")",
+			Author:    "Dailymotion",
+			MediaKind: "vod",
+		}, source), nil
+	}
+
+	// Streamable
+	reStreamable := regexp.MustCompile(`streamable\.com\/(?:e\/)?([a-zA-Z0-9]+)`)
+	if matches := reStreamable.FindStringSubmatch(input); len(matches) > 1 {
+		id := matches[1]
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "streamable",
+			VideoID:   id,
+			EmbedURL:  fmt.Sprintf("https://streamable.com/e/%s", id),
+			Title:     "Streamable (" + id + ")",
+			Author:    "Streamable",
+			MediaKind: "vod",
+		}, source), nil
+	}
+
+	// PeerTube
+	rePeerTube := regexp.MustCompile(`(?i)^https?://([^/]+)/(?:w|videos/watch|videos/embed)/([a-zA-Z0-9_-]{10,})`)
+	if matches := rePeerTube.FindStringSubmatch(input); len(matches) > 2 {
+		host := matches[1]
+		uuid := matches[2]
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "peertube",
+			VideoID:   host + "|" + uuid,
+			EmbedURL:  fmt.Sprintf("https://%s/videos/embed/%s", host, uuid),
+			Title:     "PeerTube video",
+			Author:    host,
+			MediaKind: "vod",
+		}, source), nil
+	}
+
+	// HLS
+	if strings.Contains(lower, ".m3u8") {
+		if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+			return nil, fmt.Errorf("HLS URL must use http(s)")
+		}
 		parts := strings.Split(input, "/")
 		filename := parts[len(parts)-1]
-		if filename == "" { filename = "Direct Video Stream" }
-		return &VideoInfo{
-			Platform:     "direct",
-			VideoID:      input,
-			EmbedURL:     input,
-			Title:        filename,
-			Author:       "Direct Video",
-			ThumbnailURL: "",
-		}, nil
+		if q := strings.Index(filename, "?"); q >= 0 {
+			filename = filename[:q]
+		}
+		if filename == "" {
+			filename = "HLS Stream"
+		}
+		kind := "vod"
+		if strings.Contains(lower, "live") {
+			kind = "live"
+		}
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "hls",
+			VideoID:   input,
+			EmbedURL:  input,
+			Title:     filename,
+			Author:    "HLS",
+			MediaKind: kind,
+		}, source), nil
+	}
+
+	// Direct progressive (explicit extensions only — no catch-all http)
+	if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") || strings.HasSuffix(lower, ".ogg") ||
+		strings.Contains(lower, ".mp4?") || strings.Contains(lower, ".webm?") || strings.Contains(lower, ".ogg?") {
+		if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+			return nil, fmt.Errorf("direct video URL must use http(s)")
+		}
+		parts := strings.Split(input, "/")
+		filename := parts[len(parts)-1]
+		if q := strings.Index(filename, "?"); q >= 0 {
+			filename = filename[:q]
+		}
+		if filename == "" {
+			filename = "Direct Video"
+		}
+		return finishVideoInfo(&VideoInfo{
+			Platform:  "direct",
+			VideoID:   input,
+			EmbedURL:  input,
+			Title:     filename,
+			Author:    "Direct Video",
+			MediaKind: "vod",
+		}, source), nil
 	}
 
 	return nil, fmt.Errorf("unrecognized video URL: %s", input)

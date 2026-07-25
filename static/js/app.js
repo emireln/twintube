@@ -497,10 +497,17 @@ class TwinTubeApp {
   initPlayer() {
     this.player = new VideoPlayer(
       (status, currentTime, videoId) => {
+        const meta = this.player && this.player.getPlaybackMeta
+          ? this.player.getPlaybackMeta()
+          : {};
         this.ws.sendAction('STATE_CHANGE', {
           videoId,
           status,
-          currentTime
+          currentTime,
+          platform: meta.platform || '',
+          mediaKind: meta.mediaKind || 'vod',
+          sourceUrl: meta.sourceUrl || '',
+          seekable: meta.seekable !== false
         });
       },
       () => {

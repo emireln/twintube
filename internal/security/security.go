@@ -35,6 +35,18 @@ func ApplyHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+	w.Header().Set("Content-Security-Policy", strings.Join([]string{
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.youtube.com/iframe_api https://s.ytimg.com https://cdn.jsdelivr.net",
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data: blob: https:",
+		"media-src 'self' blob: https: http:",
+		"connect-src 'self' ws: wss: https:",
+		"frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://player.twitch.tv https://www.dailymotion.com https://streamable.com https:",
+		"worker-src 'self' blob:",
+		"base-uri 'self'",
+		"form-action 'self'",
+	}, "; "))
 	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 	}

@@ -46,6 +46,10 @@ type PlaylistItem struct {
 	ThumbnailURL string `json:"thumbnailUrl"`
 	Position     int    `json:"position"`
 	AddedBy      string `json:"addedBy"`
+	Platform     string `json:"platform,omitempty"`
+	MediaKind    string `json:"mediaKind,omitempty"`
+	SourceURL    string `json:"sourceUrl,omitempty"`
+	Seekable     bool   `json:"seekable"`
 }
 
 type DB struct {
@@ -280,16 +284,42 @@ func (d *DB) migrateRoomColumns() error {
 
 // Widen video id columns so local:<hash> and direct URLs fit on Postgres.
 func (d *DB) migrateVideoIDColumns() error {
-	if d.dbType != DBTypePostgres {
-		return nil
+	if d.dbType == DBTypePostgres {
+		alters := []string{
+			`ALTER TABLE rooms ALTER COLUMN current_video_id TYPE TEXT`,
+			`ALTER TABLE playlist_items ALTER COLUMN video_id TYPE TEXT`,
+		}
+		for _, q := range alters {
+			if _, err := d.db.Exec(q); err != nil {
+				log.Printf("[DB] migrateVideoIDColumns note: %v", err)
+			}
+		}
 	}
+	return d.migrateMediaColumns()
+}
+
+func (d *DB) migrateMediaColumns() error {
 	alters := []string{
-		`ALTER TABLE rooms ALTER COLUMN current_video_id TYPE TEXT`,
-		`ALTER TABLE playlist_items ALTER COLUMN video_id TYPE TEXT`,
+		`ALTER TABLE playlist_items ADD COLUMN platform TEXT DEFAULT ''`,
+		`ALTER TABLE playlist_items ADD COLUMN media_kind TEXT DEFAULT 'vod'`,
+		`ALTER TABLE playlist_items ADD COLUMN source_url TEXT DEFAULT ''`,
+		`ALTER TABLE playlist_items ADD COLUMN seekable BOOLEAN DEFAULT TRUE`,
+	}
+	if d.dbType == DBTypeSQLite {
+		alters = []string{
+			`ALTER TABLE playlist_items ADD COLUMN platform TEXT DEFAULT ''`,
+			`ALTER TABLE playlist_items ADD COLUMN media_kind TEXT DEFAULT 'vod'`,
+			`ALTER TABLE playlist_items ADD COLUMN source_url TEXT DEFAULT ''`,
+			`ALTER TABLE playlist_items ADD COLUMN seekable INTEGER DEFAULT 1`,
+		}
 	}
 	for _, q := range alters {
 		if _, err := d.db.Exec(q); err != nil {
-			log.Printf("[DB] migrateVideoIDColumns note: %v", err)
+			msg := strings.ToLower(err.Error())
+			if strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists") {
+				continue
+			}
+			log.Printf("[DB] migrateMediaColumns note: %v", err)
 		}
 	}
 	return nil
@@ -464,8 +494,15 @@ func (d *DB) SavePlaylistItem(item PlaylistItem) error {
 		return nil
 	}
 
-	query := d.Rebind(`INSERT INTO playlist_items (id, room_id, video_id, title, author, thumbnail_url, position, added_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`)
-	_, err := d.db.Exec(query, item.ID, item.RoomID, item.VideoID, item.Title, item.Author, item.ThumbnailURL, item.Position, item.AddedBy)
+	if item.Platform == "" {
+		item.Platform = "youtube"
+	}
+	if item.MediaKind == "" {
+		item.MediaKind = "vod"
+	}
+
+	query := d.Rebind(`INSERT INTO playlist_items (id, room_id, video_id, title, author, thumbnail_url, position, added_by, platform, media_kind, source_url, seekable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`)
+	_, err := d.db.Exec(query, item.ID, item.RoomID, item.VideoID, item.Title, item.Author, item.ThumbnailURL, item.Position, item.AddedBy, item.Platform, item.MediaKind, item.SourceURL, item.Seekable)
 	return err
 }
 
@@ -473,7 +510,7 @@ func (d *DB) LoadPlaylist(roomID string) ([]PlaylistItem, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	query := d.Rebind(`SELECT id, room_id, video_id, title, author, thumbnail_url, position, added_by FROM playlist_items WHERE room_id = ? ORDER BY position ASC;`)
+	query := d.Rebind(`SELECT id, room_id, video_id, title, author, thumbnail_url, position, added_by, COALESCE(platform,''), COALESCE(media_kind,'vod'), COALESCE(source_url,''), COALESCE(seekable, TRUE) FROM playlist_items WHERE room_id = ? ORDER BY position ASC;`)
 	rows, err := d.db.Query(query, roomID)
 	if err != nil {
 		return nil, err
@@ -483,8 +520,16 @@ func (d *DB) LoadPlaylist(roomID string) ([]PlaylistItem, error) {
 	var items []PlaylistItem
 	for rows.Next() {
 		var item PlaylistItem
-		if err := rows.Scan(&item.ID, &item.RoomID, &item.VideoID, &item.Title, &item.Author, &item.ThumbnailURL, &item.Position, &item.AddedBy); err != nil {
+		var seekable bool
+		if err := rows.Scan(&item.ID, &item.RoomID, &item.VideoID, &item.Title, &item.Author, &item.ThumbnailURL, &item.Position, &item.AddedBy, &item.Platform, &item.MediaKind, &item.SourceURL, &seekable); err != nil {
 			continue
+		}
+		item.Seekable = seekable
+		if item.Platform == "" {
+			item.Platform = "youtube"
+		}
+		if item.MediaKind == "" {
+			item.MediaKind = "vod"
 		}
 		items = append(items, item)
 	}
