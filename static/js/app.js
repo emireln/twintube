@@ -30,9 +30,98 @@ class TwinTubeApp {
     this.pendingLocalMatchId = '';
     this.currentLocalVideoId = '';
     this.lastLocalStatusKey = '';
+    this.mediaAddMode = 'link';
 
     document.body.classList.add('room-gated');
     this.init();
+  }
+
+  isVideoFile(file) {
+    return !!(file && (file.type.startsWith('video/') || /\.(mp4|webm|ogg|mkv|mov)$/i.test(file.name || '')));
+  }
+
+  setupMediaModeToggle() {
+    const btnLink = document.getElementById('btnMediaModeLink');
+    const btnLocal = document.getElementById('btnMediaModeLocal');
+    const input = document.getElementById('topVideoInput');
+    const btnAddLink = document.getElementById('btnAddVideoLink');
+    const btnAddLocal = document.getElementById('btnAddLocalVideo');
+
+    const apply = (mode) => {
+      this.mediaAddMode = mode;
+      btnLink?.classList.toggle('active', mode === 'link');
+      btnLocal?.classList.toggle('active', mode === 'local');
+      if (input) {
+        input.hidden = mode !== 'link';
+        input.required = mode === 'link';
+      }
+      if (btnAddLink) btnAddLink.hidden = mode !== 'link';
+      if (btnAddLocal) btnAddLocal.hidden = mode !== 'local';
+      document.body.classList.toggle('local-add-mode', mode === 'local');
+    };
+
+    btnLink?.addEventListener('click', () => apply('link'));
+    btnLocal?.addEventListener('click', () => apply('local'));
+    apply('link');
+  }
+
+  setupPlayerDragDrop() {
+    const wrapper = document.getElementById('playerWrapper');
+    if (!wrapper) return;
+    wrapper.dataset.dropLabel = t('local_file_drop_hint');
+
+    window.addEventListener('twintube:languagechange', () => {
+      wrapper.dataset.dropLabel = t('local_file_drop_hint');
+    });
+
+    const onDrag = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    wrapper.addEventListener('dragenter', (e) => {
+      onDrag(e);
+      wrapper.classList.add('drag-over');
+    });
+    wrapper.addEventListener('dragover', (e) => {
+      onDrag(e);
+      wrapper.classList.add('drag-over');
+    });
+    wrapper.addEventListener('dragleave', (e) => {
+      onDrag(e);
+      if (!wrapper.contains(e.relatedTarget)) wrapper.classList.remove('drag-over');
+    });
+    wrapper.addEventListener('drop', async (e) => {
+      onDrag(e);
+      wrapper.classList.remove('drag-over');
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (!this.isVideoFile(file)) {
+        this.ui.showToast(t('local_file_invalid'));
+        return;
+      }
+      if (this.pendingLocalMatchId) {
+        this.ui.showToast(t('local_file_hashing'));
+        try {
+          const result = await tryMatchLocalFile(this.pendingLocalMatchId, file);
+          if (!result.ok) {
+            this.ui.showToast(t('local_file_mismatch'));
+            return;
+          }
+          const matchedId = this.pendingLocalMatchId;
+          this.pendingLocalMatchId = '';
+          this.hideLocalFileOverlay();
+          this.ui.showToast(t('local_file_matched'));
+          this.sendLocalFileStatus(matchedId, true);
+          if (this.player) this.player.resumePendingLocalFile();
+        } catch (err) {
+          console.error('[APP] Drop match failed:', err);
+          this.ui.showToast(t('local_file_failed'));
+        }
+        return;
+      }
+      await this.addLocalVideoFile(file);
+    });
   }
 
   extractRoomId() {
@@ -200,6 +289,7 @@ class TwinTubeApp {
     if (topVideoForm && topVideoInput) {
       topVideoForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (this.mediaAddMode === 'local') return;
         const url = topVideoInput.value.trim();
         if (url) {
           if (this.ws.sendAction('ADD_QUEUE', { url })) {
@@ -212,6 +302,9 @@ class TwinTubeApp {
       });
     }
 
+    this.setupMediaModeToggle();
+    this.setupPlayerDragDrop();
+
     // Local file add (bytes stay on device; only a content id is shared for sync)
     const btnAddLocal = document.getElementById('btnAddLocalVideo');
     const localFileInput = document.getElementById('localVideoFileInput');
@@ -221,7 +314,7 @@ class TwinTubeApp {
         const file = localFileInput.files?.[0];
         localFileInput.value = '';
         if (!file) return;
-        if (!file.type.startsWith('video/') && !/\.(mp4|webm|ogg|mkv|mov)$/i.test(file.name)) {
+        if (!this.isVideoFile(file)) {
           this.ui.showToast(t('local_file_invalid'));
           return;
         }
@@ -505,6 +598,7 @@ class TwinTubeApp {
     if (!isLocal) {
       this.pendingLocalMatchId = '';
       this.hideLocalFileOverlay();
+      this.renderViewersList();
       return;
     }
 
@@ -513,10 +607,15 @@ class TwinTubeApp {
       this.hideLocalFileOverlay();
       this.sendLocalFileStatus(videoId, true);
     }
+    this.renderViewersList();
     // Otherwise the player's onNeedLocalFile callback shows the overlay.
   }
 
   renderViewersList() {
+    const localActive = !!this.currentLocalVideoId;
+    const readyCount = localActive
+      ? this.lastUsers.filter(u => u.localFileReady).length
+      : 0;
     this.ui.renderViewers(
       this.lastUsers,
       this.currentClientID,
@@ -524,7 +623,11 @@ class TwinTubeApp {
       (targetId) => {
         this.ws.sendAction('TRANSFER_HOST', { targetId });
       },
-      { localVideoActive: !!this.currentLocalVideoId }
+      {
+        localVideoActive: localActive,
+        readyCount,
+        totalCount: this.lastUsers.length
+      }
     );
   }
 

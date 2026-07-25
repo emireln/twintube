@@ -160,7 +160,17 @@ export class VideoPlayer {
     if (!this.pendingLocalState) return;
     const pending = this.pendingLocalState;
     this.pendingLocalState = null;
-    this.applyServerState(pending.videoState, pending.serverTimestamp, pending.options);
+    const vs = { ...(pending.videoState || {}) };
+    const stamp = pending.serverTimestamp || vs.serverTimestamp || Date.now();
+    let expectedTime = typeof vs.currentTime === 'number' ? vs.currentTime : 0;
+    // Always recompute absolute time so late matchers catch up to live playhead.
+    if ((vs.status || 'PAUSED') === 'PLAYING' && stamp) {
+      const elapsedSec = (Date.now() - stamp) / 1000.0;
+      if (elapsedSec > 0 && elapsedSec < 3600) expectedTime += elapsedSec;
+    }
+    vs.currentTime = expectedTime;
+    vs.serverTimestamp = stamp;
+    this.applyServerState(vs, stamp, { force: true, timeAlreadyAbsolute: true });
   }
 
   getLoadedVideoId() {
@@ -264,19 +274,26 @@ export class VideoPlayer {
       const src = this.resolveDirectSrc(videoId);
       if (!src) return;
 
+      const applyHtml5 = () => {
+        try {
+          const drift = Math.abs((this.html5Player.currentTime || 0) - expectedTime);
+          if (drift > this.syncThreshold || needsLoad) {
+            this.html5Player.currentTime = Math.max(0, expectedTime);
+          }
+        } catch (_) { /* ignore seek before ready */ }
+
+        if (status === 'PLAYING') {
+          this.html5Player.play().catch(() => {});
+        } else {
+          this.html5Player.pause();
+        }
+      };
+
       if (this.html5Player.src !== src) {
         this.html5Player.src = src;
-      }
-
-      const drift = Math.abs(this.html5Player.currentTime - expectedTime);
-      if (drift > this.syncThreshold) {
-        this.html5Player.currentTime = expectedTime;
-      }
-
-      if (status === 'PLAYING') {
-        this.html5Player.play().catch(() => {});
+        this.html5Player.addEventListener('loadedmetadata', applyHtml5, { once: true });
       } else {
-        this.html5Player.pause();
+        applyHtml5();
       }
     } else if (this.genericPlayer) {
       let embedUrl = videoId;

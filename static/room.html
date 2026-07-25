@@ -19,13 +19,17 @@
 
     <!-- Top Bar Video Link Search Form -->
     <form class="top-video-bar" id="topVideoForm">
-      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL or add a local file..." required>
-      <button type="button" class="btn btn-secondary btn-nav" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add local video file">
+      <div class="media-mode-toggle" role="group" aria-label="Add media">
+        <button type="button" class="media-mode-btn active" id="btnMediaModeLink" data-mode="link" data-i18n="media_mode_link">Link</button>
+        <button type="button" class="media-mode-btn" id="btnMediaModeLocal" data-mode="local" data-i18n="media_mode_local">Local</button>
+      </div>
+      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
+      <button type="button" class="btn btn-secondary btn-nav" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" hidden>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <span data-i18n="local_file">Local</span>
+        <span data-i18n="local_file_choose_short">Choose file</span>
       </button>
       <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
-      <button type="submit" class="btn btn-primary btn-nav" data-i18n-title="add_video" title="Add Video">
+      <button type="submit" class="btn btn-primary btn-nav" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span data-i18n="add_video">Add</span>
       </button>
@@ -106,6 +110,7 @@
               <li data-i18n="local_step_2">Click the button below and select that file on your device.</li>
               <li data-i18n="local_step_3">Playback syncs automatically once the file matches.</li>
             </ol>
+            <p class="local-file-hint" data-i18n="local_file_drop_hint">Or drop the video file onto this player</p>
             <button type="button" class="btn btn-primary local-file-btn" id="btnPickLocalOverlay">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               <span data-i18n="local_file_choose">Choose matching file</span>
@@ -222,6 +227,7 @@
 
       <!-- Tab 3: Audience Viewers -->
       <div class="tab-content" id="viewersTab">
+        <div class="local-ready-banner" id="localReadyBanner" hidden></div>
         <div class="viewers-list" id="viewersList"></div>
       </div>
     </section>

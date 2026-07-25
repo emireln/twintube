@@ -627,9 +627,23 @@ export class UIManager {
   renderViewers(users, currentClientID, isHost, onTransferHost, options = {}) {
     const container = document.getElementById('viewersList');
     const counter = document.getElementById('viewersCounter');
+    const banner = document.getElementById('localReadyBanner');
     if (!container) return;
 
     const localVideoActive = !!options.localVideoActive;
+    const readyCount = options.readyCount || 0;
+    const totalCount = options.totalCount || users.length;
+
+    if (banner) {
+      if (localVideoActive) {
+        banner.hidden = false;
+        banner.className = 'local-ready-banner' + (readyCount === totalCount && totalCount > 0 ? ' is-complete' : '');
+        banner.textContent = t('local_ready_summary', { ready: readyCount, total: totalCount });
+      } else {
+        banner.hidden = true;
+        banner.textContent = '';
+      }
+    }
 
     if (counter) counter.textContent = users.length;
     container.innerHTML = '';
