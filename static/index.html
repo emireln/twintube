@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TwinTube - Watch YouTube Videos Together</title>
-  <meta name="description" content="A simple, real-time synchronized platform where you can watch YouTube videos together with friends.">
+  <title>TwinTube - Synchronized Video Watching Platform</title>
+  <meta name="description" content="Watch YouTube, Vimeo, Twitch, and direct videos synchronized in real-time with friends. Featuring live chat, collaborative playlists, and zero-config rooms.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 </head>
@@ -18,18 +18,27 @@
     </a>
 
     <div class="nav-actions">
-      <!-- Buy Me A Coffee Button -->
-      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-btn" title="Buy me a coffee">
-        <span>☕ Buy me a coffee</span>
+      <!-- Buy Me A Coffee Icon Button -->
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="nav-icon-btn coffee-btn" id="btnCoffee" title="Buy me a coffee">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+          <line x1="6" y1="1" x2="6" y2="4"/>
+          <line x1="10" y1="1" x2="10" y2="4"/>
+          <line x1="14" y1="1" x2="14" y2="4"/>
+        </svg>
       </a>
 
       <!-- Theme Toggle -->
-      <button class="btn-icon" id="btnThemeToggle" title="Toggle Light/Dark Theme">🌙</button>
+      <button class="nav-icon-btn" id="btnThemeToggle" title="Toggle Light/Dark Theme">
+        <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
+        <svg class="icon-sun" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" style="display:none;"><path d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm113-170q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283-57q47-47 47-113t-47-113q-47-47-113-47t-113 47q-47 47-47 113t47 113q47 47 113 47t113-47ZM480-480Z"/></svg>
+      </button>
 
       <!-- Auth Action Buttons -->
       <div id="authNavContainer">
-        <button class="btn btn-secondary" id="btnOpenAuthLogin">Log In</button>
-        <button class="btn btn-primary" id="btnOpenAuthRegister">Sign Up</button>
+        <button class="btn btn-secondary btn-nav" id="btnOpenAuthLogin">Log In</button>
+        <button class="btn btn-primary btn-nav" id="btnOpenAuthRegister">Sign Up</button>
         <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
           <button class="user-avatar-btn" id="btnUserMenu">
             <span id="userAvatarText">U</span>
@@ -40,7 +49,14 @@
               <small id="dropdownEmail">user@example.com</small>
             </div>
             <hr>
-            <button class="dropdown-item" id="btnLogout">Sign Out</button>
+            <button class="dropdown-item" id="btnSettings">
+              <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg>
+              <span>Settings</span>
+            </button>
+            <button class="dropdown-item" id="btnLogout">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </div>
@@ -50,32 +66,42 @@
   <!-- Landing Hero Section -->
   <main class="landing-container">
     
-    <!-- SyncTube Style Mockup Graphic -->
-    <div class="hero-mockup-card">
-      <div class="mockup-screen">
-        <div class="mockup-play-icon">▶</div>
-      </div>
-      <div class="mockup-sidebar">
-        <div class="mockup-line long"></div>
-        <div class="mockup-line short"></div>
-        <div class="mockup-line short"></div>
-      </div>
+    <!-- Hero Header -->
+    <div class="hero-badge">
+      <span class="badge-dot" style="background-color: var(--md-primary);"></span>
+      <span>Real-Time Synchronized Playback</span>
     </div>
 
-    <!-- Minimal Headline Text -->
-    <h1 class="landing-title">
-      A simple platform where you can watch<br>YouTube videos together.
+    <h1 class="landing-hero-title">
+      Watch Videos Together,<br><span class="accent-gradient">In Perfect Sync.</span>
     </h1>
 
-    <!-- Large Prominent Create Room Button -->
-    <button class="btn-create-room-large" id="btnLandingCreateRoom">
-      Create Room
-    </button>
+    <p class="landing-subtitle">
+      Create instant watch rooms for YouTube, Vimeo, Twitch, and direct video links with zero latency, live chat, and collaborative playlists.
+    </p>
+
+    <!-- Interactive Room Action Card -->
+    <div class="hero-action-card">
+      <button class="btn-create-room-hero" id="btnLandingCreateRoom">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Create Watch Room</span>
+      </button>
+
+      <div class="or-divider"><span>OR</span></div>
+
+      <form class="join-room-form" id="joinRoomForm">
+        <input type="text" id="joinRoomCodeInput" class="input-field join-input" placeholder="Enter Room Code (e.g. a7b9x2)" maxlength="12" required>
+        <button type="submit" class="btn btn-secondary btn-nav" style="height: 48px; border-radius: var(--radius-sm);">
+          <span>Join Room</span>
+        </button>
+      </form>
+    </div>
 
     <!-- Buy Me A Coffee Banner Link -->
     <div class="landing-bmc-container">
       <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-landing-link">
-        ☕ Enjoying TwinTube? Support the creator on Buy Me a Coffee
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+        <span>Enjoying TwinTube? Support the creator on Buy Me a Coffee</span>
       </a>
     </div>
 

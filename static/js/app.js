@@ -31,29 +31,44 @@ class TwinTubeApp {
   }
 
   async init() {
+    // 1. Check authentication state first
+    await this.auth.checkAuth();
+    if (this.auth.isLoggedIn()) {
+      const user = this.auth.getUser();
+      if (user && user.username) {
+        this.nickname = user.username;
+      }
+    }
+
+    // 2. Default guest nickname if empty so guest can interact immediately
+    if (!this.nickname) {
+      this.nickname = localStorage.getItem('twintube_nickname') || ('Guest_' + Math.floor(1000 + Math.random() * 9000));
+      localStorage.setItem('twintube_nickname', this.nickname);
+    }
+
     this.setupUI();
     this.setupAuthUI();
-    this.initPlayer();
-    
-    // Check saved authentication state
-    await this.auth.checkAuth();
     this.updateAuthNavUI();
 
+    // Connect WebSocket FIRST so chat, queue, reactions, viewers ALWAYS work!
     this.initWebSocket();
+
+    // Initialize player inside try/catch so player errors never block socket logic
+    try {
+      this.initPlayer();
+    } catch (err) {
+      console.error('[APP] Player init error:', err);
+    }
   }
 
   setupUI() {
     // Render Room Code Chip
-    const roomChip = document.getElementById('roomChip');
-    const roomCodeText = document.getElementById('roomCodeText');
-    if (roomChip && roomCodeText) {
-      roomChip.style.display = 'flex';
-      roomCodeText.textContent = this.roomId;
-    }
-
-    // Copy Room Link Button
+    // Room Code Chip & Copy Link Button
     const btnCopy = document.getElementById('btnCopyRoom');
-    if (btnCopy) {
+    const roomCodeText = document.getElementById('roomCodeText');
+    if (btnCopy && roomCodeText) {
+      btnCopy.style.display = 'inline-flex';
+      roomCodeText.textContent = this.roomId;
       btnCopy.addEventListener('click', () => {
         const fullURL = `${window.location.origin}/room/${this.roomId}`;
         navigator.clipboard.writeText(fullURL).then(() => {
@@ -87,6 +102,45 @@ class TwinTubeApp {
       });
     }
 
+    // Theater Mode Toggle
+    const btnTheaterMode = document.getElementById('btnTheaterMode');
+    if (btnTheaterMode) {
+      btnTheaterMode.addEventListener('click', () => {
+        document.body.classList.toggle('theater-mode');
+        const isTheater = document.body.classList.contains('theater-mode');
+        this.ui.showToast(isTheater ? 'Theater mode enabled' : 'Theater mode disabled');
+      });
+    }
+
+    // Video Noto GIF Reactions
+    const reactionButtons = document.querySelectorAll('#videoReactionBar .reaction-btn');
+    reactionButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const gif = btn.getAttribute('data-gif');
+        if (gif) {
+          this.ws.sendAction('VIDEO_REACTION', { reaction: gif });
+        }
+      });
+    });
+
+    // Top Video Link Form Submission
+    const topVideoForm = document.getElementById('topVideoForm');
+    const topVideoInput = document.getElementById('topVideoInput');
+    if (topVideoForm && topVideoInput) {
+      topVideoForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const url = topVideoInput.value.trim();
+        if (url) {
+          if (this.ws.sendAction('ADD_QUEUE', { url })) {
+            topVideoInput.value = '';
+            this.ui.showToast('Adding video to queue…');
+          } else {
+            this.ui.showToast('Not connected — try again in a moment.');
+          }
+        }
+      });
+    }
+
     // Chat Form Submission
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
@@ -101,29 +155,35 @@ class TwinTubeApp {
       });
     }
 
-    // Queue Form Submission
-    const queueForm = document.getElementById('queueForm');
-    const queueInput = document.getElementById('queueInput');
-    if (queueForm && queueInput) {
-      queueForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const url = queueInput.value.trim();
-        if (url) {
-          this.ws.sendAction('ADD_QUEUE', { url });
-          queueInput.value = '';
-          this.ui.showToast('Added video to queue.');
+    // Emoji Picker Toggle & Selection
+    const btnEmojiPicker = document.getElementById('btnEmojiPicker');
+    const emojiPicker = document.getElementById('emojiPicker');
+    if (btnEmojiPicker && emojiPicker && chatInput) {
+      btnEmojiPicker.addEventListener('click', (e) => {
+        e.stopPropagation();
+        emojiPicker.classList.toggle('active');
+      });
+
+      emojiPicker.addEventListener('click', (e) => {
+        if (e.target.tagName === 'SPAN') {
+          const emoji = e.target.textContent;
+          chatInput.value += emoji;
+          chatInput.focus();
+          emojiPicker.classList.remove('active');
         }
       });
-    }
 
-    // Nickname Modal Handling (for guests)
-    if (!this.nickname && !this.auth.isLoggedIn()) {
-      this.ui.showNicknameModal();
+      document.addEventListener('click', () => {
+        emojiPicker.classList.remove('active');
+      });
     }
 
     const btnSaveNickname = document.getElementById('btnSaveNickname');
     const nicknameInput = document.getElementById('nicknameInput');
     if (btnSaveNickname && nicknameInput) {
+      if (this.nickname) {
+        nicknameInput.value = this.nickname;
+      }
       btnSaveNickname.addEventListener('click', () => {
         const val = nicknameInput.value.trim();
         if (val) {
@@ -209,9 +269,9 @@ class TwinTubeApp {
       });
     }
 
-    // Dropdown Profile Toggle
     const btnUserMenu = document.getElementById('btnUserMenu');
     const profileDropdown = document.getElementById('profileDropdown');
+    const btnSettings = document.getElementById('btnSettings');
     const btnLogout = document.getElementById('btnLogout');
 
     if (btnUserMenu && profileDropdown) {
@@ -222,6 +282,12 @@ class TwinTubeApp {
 
       document.addEventListener('click', () => {
         profileDropdown.classList.remove('active');
+      });
+    }
+
+    if (btnSettings) {
+      btnSettings.addEventListener('click', () => {
+        this.ui.showToast('Room & Account Settings opening soon!');
       });
     }
 
@@ -280,6 +346,7 @@ class TwinTubeApp {
     });
 
     this.ws.on('INIT_STATE', (payload, timestamp) => {
+      this.currentClientID = payload.clientId || '';
       this.isHost = payload.isHost;
       this.playlist = payload.playlist || [];
 
@@ -290,7 +357,9 @@ class TwinTubeApp {
 
       if (payload.video) {
         this.updateVideoMeta(payload.video.title, payload.video.status);
-        this.player.applyServerState(payload.video, timestamp);
+        if (this.player) {
+          this.player.applyServerState(payload.video, payload.video.serverTimestamp || timestamp);
+        }
       }
 
       this.renderQueue();
@@ -301,7 +370,9 @@ class TwinTubeApp {
 
     this.ws.on('STATE_UPDATE', (payload, timestamp) => {
       this.updateVideoMeta(payload.title, payload.status);
-      this.player.applyServerState(payload, timestamp);
+      if (this.player) {
+        this.player.applyServerState(payload, payload.serverTimestamp || timestamp);
+      }
     });
 
     this.ws.on('CHAT_MESSAGE', (msg) => {
@@ -325,7 +396,39 @@ class TwinTubeApp {
       });
     });
 
+    this.ws.on('VIDEO_REACTION', (payload) => {
+      if (payload && payload.reaction) {
+        this.renderFloatingReaction(payload.reaction, payload.nickname);
+      }
+    });
+
+    this.ws.on('ERROR', (payload) => {
+      if (payload && payload.message) {
+        this.ui.showToast(payload.message);
+      }
+    });
+
     this.ws.connect();
+  }
+
+  renderFloatingReaction(reaction, nickname) {
+    const allowed = new Set(['happy.webp', 'energetic.webp', 'calm.webp', 'stressed.webp', 'tired.webp']);
+    if (!allowed.has(reaction)) return;
+
+    const overlay = document.getElementById('reactionOverlay');
+    if (!overlay) return;
+
+    const el = document.createElement('div');
+    el.className = 'floating-reaction';
+    el.style.left = `${Math.floor(Math.random() * 70) + 15}%`;
+
+    el.innerHTML = `
+      <img src="/static/gifs/${this.ui.escapeHTML(reaction)}" alt="Reaction">
+      <span class="reaction-user">${this.ui.escapeHTML(nickname || 'Guest')}</span>
+    `;
+
+    overlay.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
   }
 
   joinRoom() {

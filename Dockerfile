@@ -7,11 +7,12 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates git
 
 # Copy module files & download dependencies
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.mod ./
+RUN go mod download || true
 
 # Copy source files
 COPY . .
+RUN go mod tidy
 
 # Build lightweight static binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o twintube .

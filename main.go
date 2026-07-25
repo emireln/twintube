@@ -27,7 +27,30 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+func loadEnvFile(filename string) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			if os.Getenv(key) == "" {
+				os.Setenv(key, val)
+			}
+		}
+	}
+}
+
 func main() {
+	loadEnvFile(".env")
 	port := flag.Int("port", 8080, "Port for the HTTP server")
 	dbPath := flag.String("db", "twintube.db", "SQLite database file path fallback")
 	flag.Parse()
@@ -51,7 +74,8 @@ func main() {
 	http.HandleFunc("/api/auth/me", auth.HandleGetMe)
 
 	// API Room & Metadata Routes
-	http.HandleFunc("/api/youtube/info", handleYouTubeInfo)
+	http.HandleFunc("/api/youtube/info", handleVideoInfo)
+	http.HandleFunc("/api/video/info", handleVideoInfo)
 	http.HandleFunc("/api/room/create", handleCreateRoom)
 
 	// WebSocket & SPA Routes
@@ -99,32 +123,21 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleYouTubeInfo(w http.ResponseWriter, r *http.Request) {
+func handleVideoInfo(w http.ResponseWriter, r *http.Request) {
 	videoInput := r.URL.Query().Get("v")
 	if videoInput == "" {
 		http.Error(w, `{"error":"Missing video parameter"}`, http.StatusBadRequest)
 		return
 	}
 
-	videoID, err := utils.ExtractYouTubeID(videoInput)
+	info, err := utils.ExtractVideoInfo(videoInput)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 
-	meta, err := utils.FetchYouTubeMetadata(videoID)
-	if err != nil {
-		http.Error(w, `{"error":"Failed to fetch video metadata"}`, http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"videoId":      videoID,
-		"title":        meta.Title,
-		"author":       meta.AuthorName,
-		"thumbnailUrl": meta.ThumbnailURL,
-	})
+	json.NewEncoder(w).Encode(info)
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -272,12 +285,6 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 
 		c.Room.UpdateVideoState(payload.VideoID, payload.Status, payload.CurrentTime, payload.Title)
 
-		if payload.Status == "PLAYING" {
-			c.Room.BroadcastSystemAlert(c.Nickname + " resumed playback.")
-		} else if payload.Status == "PAUSED" {
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s paused the video at %.1fs.", c.Nickname, payload.CurrentTime))
-		}
-
 	case "CHAT_MESSAGE":
 		if c.Room == nil {
 			return
@@ -318,31 +325,30 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		videoID, err := utils.ExtractYouTubeID(payload.URL)
+		info, err := utils.ExtractVideoInfo(payload.URL)
 		if err != nil {
+			log.Printf("[ROOM] ExtractVideoInfo error: %v", err)
+			sendError(c, "Could not add video. Check the URL and try again.")
 			return
 		}
-
-		meta, _ := utils.FetchYouTubeMetadata(videoID)
 
 		item := db.PlaylistItem{
 			ID:           utils.GenerateRandomID(6),
 			RoomID:       c.RoomID,
-			VideoID:      videoID,
-			Title:        meta.Title,
-			Author:       meta.AuthorName,
-			ThumbnailURL: meta.ThumbnailURL,
-			Position:     len(c.Room.Playlist),
+			VideoID:      info.VideoID,
+			Title:        info.Title,
+			Author:       info.Author,
+			ThumbnailURL: info.ThumbnailURL,
 			AddedBy:      c.Nickname,
 		}
-		c.Room.Playlist = append(c.Room.Playlist, item)
+		item, playlist := c.Room.AppendPlaylistItem(item)
 		if db.Database != nil {
 			_ = db.Database.SavePlaylistItem(item)
 		}
 
-		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s added '%s' to the queue.", c.Nickname, meta.Title))
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s added '%s' to the queue.", c.Nickname, info.Title))
 
-		raw, _ := json.Marshal(c.Room.Playlist)
+		raw, _ := json.Marshal(playlist)
 		c.Room.Broadcast <- room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
@@ -359,30 +365,21 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		var targetItem *db.PlaylistItem
-		var newPlaylist []db.PlaylistItem
-
-		for _, item := range c.Room.Playlist {
-			if item.ID == payload.ItemID {
-				targetItem = &item
-			} else {
-				newPlaylist = append(newPlaylist, item)
-			}
+		targetItem, playlist, found := c.Room.PlayPlaylistItem(payload.ItemID)
+		if !found {
+			return
 		}
 
-		if targetItem != nil {
-			c.Room.Playlist = newPlaylist
-			if db.Database != nil {
-				_ = db.Database.DeletePlaylistItem(targetItem.ID)
-			}
-			c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title)
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("Now playing: '%s'", targetItem.Title))
+		if db.Database != nil {
+			_ = db.Database.DeletePlaylistItem(targetItem.ID)
+		}
+		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title)
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("Now playing: '%s'", targetItem.Title))
 
-			raw, _ := json.Marshal(c.Room.Playlist)
-			c.Room.Broadcast <- room.WSMessage{
-				Action:  "QUEUE_UPDATE",
-				Payload: raw,
-			}
+		raw, _ := json.Marshal(playlist)
+		c.Room.Broadcast <- room.WSMessage{
+			Action:  "QUEUE_UPDATE",
+			Payload: raw,
 		}
 
 	case "REMOVE_QUEUE_ITEM":
@@ -396,17 +393,12 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		var newPlaylist []db.PlaylistItem
-		for _, item := range c.Room.Playlist {
-			if item.ID != payload.ItemID {
-				newPlaylist = append(newPlaylist, item)
-			} else if db.Database != nil {
-				_ = db.Database.DeletePlaylistItem(item.ID)
-			}
+		removed, playlist := c.Room.RemovePlaylistItem(payload.ItemID)
+		if removed && db.Database != nil {
+			_ = db.Database.DeletePlaylistItem(payload.ItemID)
 		}
-		c.Room.Playlist = newPlaylist
 
-		raw, _ := json.Marshal(c.Room.Playlist)
+		raw, _ := json.Marshal(playlist)
 		c.Room.Broadcast <- room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
@@ -423,33 +415,70 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		if targetClient, ok := c.Room.Clients[payload.TargetClientID]; ok {
-			c.IsHost = false
-			c.Room.HostID = targetClient.ID
-			targetClient.IsHost = true
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s transferred Host status to %s.", c.Nickname, targetClient.Nickname))
+		if targetNick, ok := c.Room.TransferHost(c, payload.TargetClientID); ok {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s transferred Host status to %s.", c.Nickname, targetNick))
 		}
 
 		c.Room.BroadcastUserList()
+
+	case "VIDEO_REACTION":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			Reaction string `json:"reaction"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+
+		allowed := map[string]bool{
+			"happy.webp":     true,
+			"energetic.webp": true,
+			"calm.webp":      true,
+			"stressed.webp":  true,
+			"tired.webp":     true,
+		}
+		if !allowed[payload.Reaction] {
+			return
+		}
+
+		raw, _ := json.Marshal(map[string]interface{}{
+			"reaction": payload.Reaction,
+			"nickname": c.Nickname,
+		})
+		c.Room.Broadcast <- room.WSMessage{
+			Action:  "VIDEO_REACTION",
+			Payload: raw,
+		}
 
 	case "SYNC_REQUEST":
 		if c.Room == nil {
 			return
 		}
-		calculatedTime := c.Room.GetCalculatedTime()
+		state := c.Room.SnapshotState()
+		nowMs := time.Now().UnixNano() / 1e6
 		statePayload := map[string]interface{}{
-			"videoId":         c.Room.State.VideoID,
-			"title":           c.Room.State.Title,
-			"status":          c.Room.State.Status,
-			"currentTime":     calculatedTime,
-			"serverTimestamp": time.Now().UnixNano() / 1e6,
+			"videoId":         state.VideoID,
+			"title":           state.Title,
+			"status":          state.Status,
+			"currentTime":     c.Room.GetCalculatedTime(),
+			"serverTimestamp": nowMs,
 		}
 
 		raw, _ := json.Marshal(statePayload)
 		c.Send <- room.WSMessage{
 			Action:    "STATE_UPDATE",
 			Payload:   raw,
-			Timestamp: time.Now().UnixNano() / 1e6,
+			Timestamp: nowMs,
 		}
+	}
+}
+
+func sendError(c *room.Client, message string) {
+	raw, _ := json.Marshal(map[string]string{"message": message})
+	select {
+	case c.Send <- room.WSMessage{Action: "ERROR", Payload: raw}:
+	default:
 	}
 }

@@ -90,7 +90,7 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 			Playlist:   make([]db.PlaylistItem, 0),
 			Register:   make(chan *Client),
 			Unregister: make(chan *Client),
-			Broadcast:  make(chan WSMessage),
+			Broadcast:  make(chan WSMessage, 64),
 		}
 
 		if db.Database != nil {
@@ -126,15 +126,20 @@ func (r *Room) Run() {
 			if client.IsGuest {
 				userType = " (Guest)"
 			}
+			// deliver() directly — never send on Broadcast from inside Run (deadlock)
 			r.BroadcastSystemAlert(client.Nickname + userType + " joined the room.")
 			r.BroadcastUserList()
 			r.SendInitState(client)
 
 		case client := <-r.Unregister:
+			leftNickname := ""
+			newHostAlert := ""
+
 			r.mu.Lock()
 			if _, ok := r.Clients[client.ID]; ok {
 				delete(r.Clients, client.ID)
 				close(client.Send)
+				leftNickname = client.Nickname
 
 				log.Printf("[ROOM %s] Client left: %s", r.ID, client.Nickname)
 
@@ -143,29 +148,59 @@ func (r *Room) Run() {
 					for _, c := range r.Clients {
 						r.HostID = c.ID
 						c.IsHost = true
-						r.BroadcastSystemAlert(c.Nickname + " is now the Host.")
+						newHostAlert = c.Nickname + " is now the Host."
 						break
 					}
 				}
 			}
 			r.mu.Unlock()
 
-			r.BroadcastSystemAlert(client.Nickname + " left the room.")
-			r.BroadcastUserList()
+			if leftNickname != "" {
+				if newHostAlert != "" {
+					r.BroadcastSystemAlert(newHostAlert)
+				}
+				r.BroadcastSystemAlert(leftNickname + " left the room.")
+				r.BroadcastUserList()
+			}
 
 		case message := <-r.Broadcast:
-			r.mu.RLock()
-			for _, client := range r.Clients {
-				select {
-				case client.Send <- message:
-				default:
-					close(client.Send)
-					delete(r.Clients, client.ID)
-				}
-			}
-			r.mu.RUnlock()
+			r.deliver(message)
 		}
 	}
+}
+
+// deliver fans out a message to all clients without using the Broadcast channel,
+// so it is safe to call from inside Run (Register/Unregister) as well as from
+// BroadcastSystemAlert / BroadcastUserList.
+func (r *Room) deliver(message WSMessage) {
+	r.mu.RLock()
+	clients := make([]*Client, 0, len(r.Clients))
+	for _, client := range r.Clients {
+		clients = append(clients, client)
+	}
+	r.mu.RUnlock()
+
+	var stale []*Client
+	for _, client := range clients {
+		select {
+		case client.Send <- message:
+		default:
+			stale = append(stale, client)
+		}
+	}
+
+	if len(stale) == 0 {
+		return
+	}
+
+	r.mu.Lock()
+	for _, client := range stale {
+		if _, ok := r.Clients[client.ID]; ok {
+			delete(r.Clients, client.ID)
+			close(client.Send)
+		}
+	}
+	r.mu.Unlock()
 }
 
 func (r *Room) GetCalculatedTime() float64 {
@@ -180,18 +215,28 @@ func (r *Room) GetCalculatedTime() float64 {
 	return r.State.CurrentTime
 }
 
+func (r *Room) SnapshotState() VideoState {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.State
+}
+
 func (r *Room) SendInitState(client *Client) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	calculatedTime := r.State.CurrentTime
+	nowMs := time.Now().UnixNano() / 1e6
 	if r.State.Status == "PLAYING" {
-		nowMs := time.Now().UnixNano() / 1e6
 		calculatedTime += float64(nowMs-r.State.ServerTimestamp) / 1000.0
 	}
 
+	playlist := make([]db.PlaylistItem, len(r.Playlist))
+	copy(playlist, r.Playlist)
+
 	statePayload := map[string]interface{}{
 		"roomId":   r.ID,
+		"clientId": client.ID,
 		"isHost":   client.IsHost,
 		"isGuest":  client.IsGuest,
 		"hostId":   r.HostID,
@@ -200,25 +245,32 @@ func (r *Room) SendInitState(client *Client) {
 			"title":           r.State.Title,
 			"status":          r.State.Status,
 			"currentTime":     calculatedTime,
-			"serverTimestamp": time.Now().UnixNano() / 1e6,
+			"serverTimestamp": nowMs,
 		},
-		"playlist": r.Playlist,
+		"playlist": playlist,
 		"users":    r.getUserListUnsafe(),
 	}
 
 	raw, _ := json.Marshal(statePayload)
-	client.Send <- WSMessage{
+	select {
+	case client.Send <- WSMessage{
 		Action:    "INIT_STATE",
 		Payload:   raw,
-		Timestamp: time.Now().UnixNano() / 1e6,
+		Timestamp: nowMs,
+	}:
+	default:
+		log.Printf("[ROOM %s] Failed to send INIT_STATE to %s (send buffer full)", r.ID, client.Nickname)
 	}
 
 	if db.Database != nil {
 		if history, err := db.Database.LoadChatHistory(r.ID, 50); err == nil && len(history) > 0 {
 			rawHistory, _ := json.Marshal(history)
-			client.Send <- WSMessage{
+			select {
+			case client.Send <- WSMessage{
 				Action:  "CHAT_HISTORY",
 				Payload: rawHistory,
+			}:
+			default:
 			}
 		}
 	}
@@ -230,10 +282,10 @@ func (r *Room) BroadcastUserList() {
 	r.mu.RUnlock()
 
 	raw, _ := json.Marshal(users)
-	r.Broadcast <- WSMessage{
+	r.deliver(WSMessage{
 		Action:  "USER_LIST",
 		Payload: raw,
-	}
+	})
 }
 
 func (r *Room) getUserListUnsafe() []UserSummary {
@@ -265,16 +317,18 @@ func (r *Room) BroadcastSystemAlert(content string) {
 	}
 
 	raw, _ := json.Marshal(msg)
-	r.Broadcast <- WSMessage{
+	r.deliver(WSMessage{
 		Action:  "CHAT_MESSAGE",
 		Payload: raw,
-	}
+	})
 }
 
 func (r *Room) UpdateVideoState(videoId string, status string, currentTime float64, title string) {
 	r.mu.Lock()
 	nowMs := time.Now().UnixNano() / 1e6
-	r.State.VideoID = videoId
+	if videoId != "" {
+		r.State.VideoID = videoId
+	}
 	r.State.Status = status
 	r.State.CurrentTime = currentTime
 	r.State.ServerTimestamp = nowMs
@@ -282,16 +336,18 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		r.State.Title = title
 	}
 
+	stateCopy := r.State
+
 	if db.Database != nil {
 		_ = db.Database.SaveRoom(r.ID, r.HostID, r.State.VideoID, r.State.Status, r.State.CurrentTime)
 	}
 	r.mu.Unlock()
 
 	statePayload := map[string]interface{}{
-		"videoId":         r.State.VideoID,
-		"title":           r.State.Title,
-		"status":          r.State.Status,
-		"currentTime":     r.State.CurrentTime,
+		"videoId":         stateCopy.VideoID,
+		"title":           stateCopy.Title,
+		"status":          stateCopy.Status,
+		"currentTime":     stateCopy.CurrentTime,
 		"serverTimestamp": nowMs,
 	}
 
@@ -301,4 +357,83 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		Payload:   raw,
 		Timestamp: nowMs,
 	}
+}
+
+func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	item.Position = len(r.Playlist)
+	r.Playlist = append(r.Playlist, item)
+
+	out := make([]db.PlaylistItem, len(r.Playlist))
+	copy(out, r.Playlist)
+	return item, out
+}
+
+func (r *Room) PlayPlaylistItem(itemID string) (db.PlaylistItem, []db.PlaylistItem, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var target db.PlaylistItem
+	found := false
+	newPlaylist := make([]db.PlaylistItem, 0, len(r.Playlist))
+
+	for _, item := range r.Playlist {
+		if item.ID == itemID {
+			target = item
+			found = true
+			continue
+		}
+		newPlaylist = append(newPlaylist, item)
+	}
+
+	if !found {
+		out := make([]db.PlaylistItem, len(r.Playlist))
+		copy(out, r.Playlist)
+		return db.PlaylistItem{}, out, false
+	}
+
+	r.Playlist = newPlaylist
+	out := make([]db.PlaylistItem, len(r.Playlist))
+	copy(out, r.Playlist)
+	return target, out, true
+}
+
+func (r *Room) RemovePlaylistItem(itemID string) (removed bool, playlist []db.PlaylistItem) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	newPlaylist := make([]db.PlaylistItem, 0, len(r.Playlist))
+	for _, item := range r.Playlist {
+		if item.ID == itemID {
+			removed = true
+			continue
+		}
+		newPlaylist = append(newPlaylist, item)
+	}
+	r.Playlist = newPlaylist
+
+	playlist = make([]db.PlaylistItem, len(r.Playlist))
+	copy(playlist, r.Playlist)
+	return removed, playlist
+}
+
+func (r *Room) TransferHost(from *Client, targetClientID string) (targetNickname string, ok bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !from.IsHost {
+		return "", false
+	}
+
+	target, exists := r.Clients[targetClientID]
+	if !exists {
+		return "", false
+	}
+
+	from.IsHost = false
+	r.HostID = target.ID
+	target.IsHost = true
+	return target.Nickname, true
 }

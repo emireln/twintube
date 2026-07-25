@@ -23,7 +23,6 @@ class LandingApp {
     if (btnCreate) {
       btnCreate.addEventListener('click', async () => {
         btnCreate.disabled = true;
-        btnCreate.textContent = 'Creating Room...';
 
         try {
           const resp = await fetch('/api/room/create');
@@ -36,8 +35,30 @@ class LandingApp {
         } catch (err) {
           this.ui.showToast('Failed to create room. Please try again.');
           btnCreate.disabled = false;
-          btnCreate.textContent = 'Create Room';
         }
+      });
+    }
+
+    const joinForm = document.getElementById('joinRoomForm');
+    const joinInput = document.getElementById('joinRoomCodeInput');
+    if (joinForm && joinInput) {
+      joinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        let code = joinInput.value.trim();
+        const match = code.match(/\/room\/([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+          code = match[1];
+        }
+        if (code) {
+          window.location.href = `/room/${code}`;
+        }
+      });
+    }
+
+    const btnSettings = document.getElementById('btnSettings');
+    if (btnSettings) {
+      btnSettings.addEventListener('click', () => {
+        this.ui.showToast('Settings panel opening soon!');
       });
     }
   }

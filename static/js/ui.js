@@ -28,7 +28,12 @@ export class UIManager {
     localStorage.setItem('twintube_theme', theme);
     const btnTheme = document.getElementById('btnThemeToggle');
     if (btnTheme) {
-      btnTheme.textContent = theme === 'dark' ? '☀️' : '🌙';
+      const moon = btnTheme.querySelector('.icon-moon');
+      const sun = btnTheme.querySelector('.icon-sun');
+      if (moon && sun) {
+        moon.style.display = theme === 'dark' ? 'none' : 'block';
+        sun.style.display = theme === 'dark' ? 'block' : 'none';
+      }
     }
   }
 
@@ -55,9 +60,14 @@ export class UIManager {
   showToast(message, duration = 3000) {
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `<span>ℹ️</span> <span>${this.escapeHTML(message)}</span>`;
+    toast.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <span>${this.escapeHTML(message)}</span>`;
     
-    this.toastContainer.appendChild(toast);
+    if (!this.toastContainer) {
+      this.toastContainer = document.getElementById('toastContainer');
+    }
+    if (this.toastContainer) {
+      this.toastContainer.appendChild(toast);
+    }
 
     setTimeout(() => {
       toast.style.opacity = '0';
@@ -125,7 +135,7 @@ export class UIManager {
     if (playlist.length === 0) {
       container.innerHTML = `
         <div style="padding: 24px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">
-          The queue is currently empty.<br>Paste a YouTube URL above to add a video!
+          The queue is currently empty.<br>Paste a YouTube link in the top bar to add a video!
         </div>
       `;
       return;
@@ -141,8 +151,12 @@ export class UIManager {
           <div class="queue-meta">Added by ${this.escapeHTML(item.addedBy)}</div>
         </div>
         <div class="queue-actions">
-          <button class="btn-icon btn-play" title="Play Video">▶️</button>
-          <button class="btn-icon btn-remove" title="Remove from Queue">🗑️</button>
+          <button class="nav-icon-btn btn-play" title="Play Video" style="width:30px; height:30px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <button class="nav-icon-btn btn-remove" title="Remove from Queue" style="width:30px; height:30px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
         </div>
       `;
 
@@ -178,7 +192,7 @@ export class UIManager {
         </div>
         <div style="display: flex; gap: 6px; align-items: center;">
           ${user.isGuest ? '<span class="badge badge-guest" style="font-size: 10px; padding: 2px 6px;">Guest</span>' : ''}
-          ${user.isHost ? '<span class="badge badge-host">👑 Host</span>' : ''}
+          ${user.isHost ? '<span class="badge badge-host"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg> Host</span>' : ''}
           ${isHost && !user.isHost ? `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">Make Host</button>` : ''}
         </div>
       `;

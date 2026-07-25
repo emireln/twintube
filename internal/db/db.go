@@ -166,7 +166,7 @@ func (d *DB) createTables() error {
 				host_id VARCHAR(64) NOT NULL,
 				current_video_id VARCHAR(64) DEFAULT 'dQw4w9WgXcQ',
 				current_status VARCHAR(32) DEFAULT 'PAUSED',
-				current_time DOUBLE PRECISION DEFAULT 0.0,
+				"current_time" DOUBLE PRECISION DEFAULT 0.0,
 				updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 				created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 			);`,
@@ -292,13 +292,13 @@ func (d *DB) SaveRoom(roomID, hostID, videoID, status string, currentTime float6
 
 	var query string
 	if d.dbType == DBTypePostgres {
-		query = `INSERT INTO rooms (id, host_id, current_video_id, current_status, current_time, updated_at)
+		query = `INSERT INTO rooms (id, host_id, current_video_id, current_status, "current_time", updated_at)
 			VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
 			ON CONFLICT(id) DO UPDATE SET
 				host_id = EXCLUDED.host_id,
 				current_video_id = EXCLUDED.current_video_id,
 				current_status = EXCLUDED.current_status,
-				current_time = EXCLUDED.current_time,
+				"current_time" = EXCLUDED."current_time",
 				updated_at = CURRENT_TIMESTAMP;`
 	} else {
 		query = `INSERT INTO rooms (id, host_id, current_video_id, current_status, current_time, updated_at)
@@ -328,7 +328,7 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	query := d.Rebind(`SELECT nickname, content, is_system, created_at FROM messages WHERE room_id = ? ORDER BY id ASC LIMIT ?;`)
+	query := d.Rebind(`SELECT nickname, content, is_system, created_at FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?;`)
 	rows, err := d.db.Query(query, roomID, limit)
 	if err != nil {
 		return nil, err
@@ -349,6 +349,11 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 		msg.IsSystem = isSys
 		msg.Timestamp = createdAt.Format("15:04")
 		messages = append(messages, msg)
+	}
+
+	// Reverse so clients render oldest → newest
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 
 	return messages, nil

@@ -50,6 +50,83 @@ func ExtractYouTubeID(input string) (string, error) {
 	return "", fmt.Errorf("invalid YouTube URL or Video ID: %s", input)
 }
 
+// VideoInfo represents metadata and embed info for any supported video platform
+type VideoInfo struct {
+	Platform     string `json:"platform"`
+	VideoID      string `json:"videoId"`
+	EmbedURL     string `json:"embedUrl"`
+	Title        string `json:"title"`
+	Author       string `json:"author"`
+	ThumbnailURL string `json:"thumbnailUrl"`
+}
+
+// ExtractVideoInfo parses YouTube, Vimeo, Twitch, or Direct video URLs
+func ExtractVideoInfo(input string) (*VideoInfo, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, fmt.Errorf("empty video input")
+	}
+
+	// 1. YouTube check
+	if ytID, err := ExtractYouTubeID(input); err == nil && ytID != "" {
+		meta, _ := FetchYouTubeMetadata(ytID)
+		return &VideoInfo{
+			Platform:     "youtube",
+			VideoID:      ytID,
+			EmbedURL:     fmt.Sprintf("https://www.youtube.com/embed/%s?enablejsapi=1&autoplay=1", ytID),
+			Title:        meta.Title,
+			Author:       meta.AuthorName,
+			ThumbnailURL: meta.ThumbnailURL,
+		}, nil
+	}
+
+	// 2. Vimeo (vimeo.com/12345678)
+	reVimeo := regexp.MustCompile(`vimeo\.com\/(?:video\/)?([0-9]+)`)
+	if matches := reVimeo.FindStringSubmatch(input); len(matches) > 1 {
+		vimeoID := matches[1]
+		return &VideoInfo{
+			Platform:     "vimeo",
+			VideoID:      vimeoID,
+			EmbedURL:     fmt.Sprintf("https://player.vimeo.com/video/%s?autoplay=1", vimeoID),
+			Title:        "Vimeo Video (" + vimeoID + ")",
+			Author:       "Vimeo",
+			ThumbnailURL: "",
+		}, nil
+	}
+
+	// 3. Twitch (twitch.tv/videos/12345)
+	reTwitch := regexp.MustCompile(`twitch\.tv\/videos\/([0-9]+)`)
+	if matches := reTwitch.FindStringSubmatch(input); len(matches) > 1 {
+		twitchID := matches[1]
+		return &VideoInfo{
+			Platform:     "twitch",
+			VideoID:      twitchID,
+			EmbedURL:     fmt.Sprintf("https://player.twitch.tv/?video=%s&parent=localhost", twitchID),
+			Title:        "Twitch Video (" + twitchID + ")",
+			Author:       "Twitch",
+			ThumbnailURL: "",
+		}, nil
+	}
+
+	// 4. Direct Video URL (.mp4, .webm, .ogg, .m3u8)
+	lower := strings.ToLower(input)
+	if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") || strings.HasSuffix(lower, ".ogg") || strings.HasSuffix(lower, ".m3u8") || strings.HasPrefix(lower, "http") {
+		parts := strings.Split(input, "/")
+		filename := parts[len(parts)-1]
+		if filename == "" { filename = "Direct Video Stream" }
+		return &VideoInfo{
+			Platform:     "direct",
+			VideoID:      input,
+			EmbedURL:     input,
+			Title:        filename,
+			Author:       "Direct Video",
+			ThumbnailURL: "",
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unrecognized video URL: %s", input)
+}
+
 // YouTubeMetadata represents oEmbed video response
 type YouTubeMetadata struct {
 	Title        string `json:"title"`

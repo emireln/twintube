@@ -17,30 +17,49 @@
       <span>Twin<span class="accent">Tube</span></span>
     </a>
 
-    <div class="nav-actions">
-      <!-- Room Code Badge -->
-      <div class="room-chip" id="roomChip" style="display: none;">
-        <span>Room:</span>
-        <code id="roomCodeText">------</code>
-        <button class="btn-icon" id="btnCopyRoom" title="Copy Room Link">📋</button>
-      </div>
+    <!-- Top Bar Video Link Search Form -->
+    <form class="top-video-bar" id="topVideoForm">
+      <input type="text" id="topVideoInput" class="input-field top-input" placeholder="Paste video link (YouTube, Vimeo, Twitch, MP4...)" required>
+      <button type="submit" class="btn btn-primary btn-nav" title="Add Video">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Add</span>
+      </button>
+    </form>
 
-      <!-- Buy Me A Coffee Button -->
-      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="bmc-btn" title="Buy me a coffee">
-        <span>☕ Buy me a coffee</span>
+    <div class="nav-actions">
+      <!-- Room Code Badge & Copy Link Button Container -->
+      <button class="room-chip" id="btnCopyRoom" title="Click to Copy Room Link" style="display: none;">
+        <span class="chip-label">Room:</span>
+        <code id="roomCodeText">------</code>
+        <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg>
+      </button>
+
+      <!-- Buy Me A Coffee Icon Button -->
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener" class="nav-icon-btn coffee-btn" id="btnCoffee" title="Buy me a coffee">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+          <line x1="6" y1="1" x2="6" y2="4"/>
+          <line x1="10" y1="1" x2="10" y2="4"/>
+          <line x1="14" y1="1" x2="14" y2="4"/>
+        </svg>
       </a>
 
       <!-- Theme Toggle -->
-      <button class="btn-icon" id="btnThemeToggle" title="Toggle Light/Dark Theme">🌙</button>
+      <button class="nav-icon-btn" id="btnThemeToggle" title="Toggle Light/Dark Theme">
+        <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
+        <svg class="icon-sun" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" style="display:none;"><path d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm113-170q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283-57q47-47 47-113t-47-113q-47-47-113-47t-113 47q-47 47-47 113t47 113q47 47 113 47t113-47ZM480-480Z"/></svg>
+      </button>
 
       <!-- New Room Button -->
-      <button class="btn btn-primary" id="btnNewRoom">
-        <span>+ New Room</span>
+      <button class="btn btn-secondary btn-nav" id="btnNewRoom" title="Create New Room">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>New Room</span>
       </button>
 
       <!-- User Auth Section -->
       <div id="authNavContainer">
-        <button class="btn btn-secondary" id="btnOpenAuth">Sign In</button>
+        <button class="btn btn-primary btn-nav" id="btnOpenAuth">Sign In</button>
         <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
           <button class="user-avatar-btn" id="btnUserMenu">
             <span id="userAvatarText">U</span>
@@ -51,7 +70,15 @@
               <small id="dropdownEmail">user@example.com</small>
             </div>
             <hr>
-            <button class="dropdown-item" id="btnLogout">Sign Out</button>
+            <!-- Settings Option in Profile Dropdown -->
+            <button class="dropdown-item" id="btnSettings">
+              <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg>
+              <span>Settings</span>
+            </button>
+            <button class="dropdown-item" id="btnLogout">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </div>
@@ -63,45 +90,82 @@
 
     <!-- Left Column: Video Player & Meta Info -->
     <section class="player-column">
-      <div class="player-wrapper">
+      <div class="player-wrapper" id="playerWrapper">
         <div id="ytPlayer"></div>
+        <video id="html5Player" controls playsinline style="display: none; width: 100%; height: 100%; background: #000;"></video>
+        <iframe id="genericPlayer" style="display: none; width: 100%; height: 100%; border: none;" allowfullscreen allow="autoplay"></iframe>
+        
+        <!-- Floating Reactions Overlay -->
+        <div class="reaction-overlay" id="reactionOverlay"></div>
       </div>
 
       <!-- Ambient Video Info Bar -->
       <div class="video-meta-card">
         <div class="video-info">
-          <h1 class="video-title" id="videoTitle">Rick Astley - Never Gonna Give You Up</h1>
+          <h1 class="video-title" id="videoTitle">TwinTube Sync Room</h1>
           <div class="status-badges">
             <span class="badge badge-paused" id="statusBadge">
               <span class="badge-dot"></span>
               <span id="statusText">PAUSED</span>
             </span>
             <span class="badge badge-host" id="hostBadge" style="display: none;">
-              <span>👑 You are Host</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
+              <span>Host</span>
             </span>
           </div>
         </div>
 
         <div class="player-controls-meta">
-          <button class="btn btn-secondary" id="btnResync" title="Force Sync to Server Position">
-            🔄 Resync
+          <!-- Noto GIF Reaction Toolbar (Google Meet Style) -->
+          <div class="video-reaction-bar" id="videoReactionBar">
+            <button class="reaction-btn" data-gif="happy.webp" title="Happy Reaction">
+              <img src="/static/gifs/happy.webp" alt="Happy">
+            </button>
+            <button class="reaction-btn" data-gif="energetic.webp" title="Energetic Reaction">
+              <img src="/static/gifs/energetic.webp" alt="Energetic">
+            </button>
+            <button class="reaction-btn" data-gif="calm.webp" title="Calm Reaction">
+              <img src="/static/gifs/calm.webp" alt="Calm">
+            </button>
+            <button class="reaction-btn" data-gif="stressed.webp" title="Stressed Reaction">
+              <img src="/static/gifs/stressed.webp" alt="Stressed">
+            </button>
+            <button class="reaction-btn" data-gif="tired.webp" title="Tired Reaction">
+              <img src="/static/gifs/tired.webp" alt="Tired">
+            </button>
+          </div>
+
+          <!-- Resync Button -->
+          <button class="btn btn-secondary btn-nav" id="btnResync" title="Force Sync to Server Position">
+            <svg viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M160-160v-80h110l-16-14q-52-46-73-105t-21-119q0-111 66.5-197.5T400-790v84q-72 26-116 88.5T240-478q0 45 17 87.5t53 78.5l10 10v-98h80v240H160Zm400-10v-84q72-26 116-88.5T720-482q0-45-17-87.5T650-648l-10-10v98h-80v-240h240v80H690l16 14q49 49 71.5 106.5T800-482q0 111-66.5 197.5T560-170Z"/></svg>
+            <span>Resync</span>
+          </button>
+
+          <!-- Theater Mode Toggle Button -->
+          <button class="nav-icon-btn" id="btnTheaterMode" title="Toggle Theater Mode">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </button>
         </div>
       </div>
     </section>
 
     <!-- Right Column: Tabbed Panel -->
-    <section class="panel-column">
+    <section class="panel-column" id="panelColumn">
       <!-- Material Tab Bar -->
       <nav class="tab-header">
         <button class="tab-btn active" data-tab="chatTab">
-          💬 Chat
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Chat</span>
         </button>
         <button class="tab-btn" data-tab="queueTab">
-          📜 Queue <span class="tab-counter" id="queueCounter">0</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <span>Queue</span>
+          <span class="tab-counter" id="queueCounter">0</span>
         </button>
         <button class="tab-btn" data-tab="viewersTab">
-          👥 Viewers <span class="tab-counter" id="viewersCounter">1</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Viewers</span>
+          <span class="tab-counter" id="viewersCounter">1</span>
         </button>
       </nav>
 
@@ -109,19 +173,36 @@
       <div class="tab-content active" id="chatTab">
         <div class="chat-messages" id="chatMessages"></div>
 
-        <form class="chat-input-bar" id="chatForm">
-          <input type="text" id="chatInput" class="input-field" placeholder="Send a message..." autocomplete="off">
-          <button type="submit" class="btn btn-primary">Send</button>
-        </form>
+        <!-- Chat Form with Emoji Picker -->
+        <div class="chat-input-wrapper">
+          <!-- Emoji Picker Panel -->
+          <div class="emoji-picker" id="emojiPicker">
+            <div class="emoji-grid">
+              <span>😀</span><span>😂</span><span>😍</span><span>🔥</span>
+              <span>👏</span><span>👍</span><span>🎉</span><span>🚀</span>
+              <span>❤️</span><span>🥳</span><span>😎</span><span>💡</span>
+              <span>🍿</span><span>🎬</span><span>🎵</span><span>💯</span>
+              <span>🙌</span><span>💩</span><span>🤩</span><span>✨</span>
+            </div>
+          </div>
+
+          <form class="chat-input-bar" id="chatForm">
+            <button type="button" class="btn-chat-icon" id="btnEmojiPicker" title="Insert Emoji">
+              <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm263.5 221.5Q659-337 684-400H276q25 63 80.5 101.5T480-260q68 0 123.5-38.5Z"/></svg>
+            </button>
+            <input type="text" id="chatInput" class="input-field" placeholder="Send a message..." autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-chat-send" title="Send Message">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </form>
+        </div>
       </div>
 
       <!-- Tab 2: Playlist Queue -->
       <div class="tab-content" id="queueTab">
-        <form class="queue-input-bar" id="queueForm">
-          <input type="text" id="queueInput" class="input-field" placeholder="Paste YouTube link or Video ID..." required>
-          <button type="submit" class="btn btn-primary">+ Add</button>
-        </form>
-
+        <div class="queue-header-info">
+          <span>Queued Videos</span>
+        </div>
         <div class="queue-list" id="queueList"></div>
       </div>
 

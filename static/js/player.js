@@ -1,57 +1,113 @@
-/* TwinTube - YouTube iFrame Player Controller & Drift Sync Engine */
+/* TwinTube - Universal Video Player Controller & Sync Engine */
 
 export class VideoPlayer {
   constructor(onLocalStateChange, onVideoEnded) {
-    this.player = null;
-    this.currentVideoId = '';
+    this.ytPlayer = null;
+    this.html5Player = document.getElementById('html5Player');
+    this.genericPlayer = document.getElementById('genericPlayer');
+    this.ytContainer = document.getElementById('ytPlayer');
+
+    this.activePlatform = 'youtube'; // 'youtube', 'direct', 'vimeo', 'twitch', 'generic'
+    this.currentVideoId = 'dQw4w9WgXcQ';
     this.currentStatus = 'PAUSED';
     this.onLocalStateChange = onLocalStateChange;
     this.onVideoEnded = onVideoEnded;
     this.isRemoteUpdate = false;
     this.isReady = false;
     this.syncThreshold = 1.5; // Drift tolerance in seconds
+    this.pendingServerState = null;
+    this.remoteUpdateTimer = null;
 
     this.initYouTubeAPI();
+    this.initHTML5Player();
   }
 
   initYouTubeAPI() {
     if (window.YT && window.YT.Player) {
-      this.createPlayer();
+      this.createYTPlayer();
     } else {
-      window.onYouTubeIframeAPIReady = () => this.createPlayer();
+      window.onYouTubeIframeAPIReady = () => this.createYTPlayer();
     }
   }
 
-  createPlayer() {
-    this.player = new window.YT.Player('ytPlayer', {
-      height: '100%',
-      width: '100%',
-      videoId: 'dQw4w9WgXcQ',
-      playerVars: {
-        autoplay: 0,
-        controls: 1,
-        rel: 0,
-        modestbranding: 1,
-        enablejsapi: 1,
-        origin: window.location.origin
-      },
-      events: {
-        onReady: (event) => this.onPlayerReady(event),
-        onStateChange: (event) => this.onPlayerStateChange(event)
-      }
+  createYTPlayer() {
+    try {
+      this.ytPlayer = new window.YT.Player('ytPlayer', {
+        height: '100%',
+        width: '100%',
+        videoId: this.currentVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          rel: 0,
+          modestbranding: 1,
+          enablejsapi: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: () => {
+            this.isReady = true;
+            console.log('[PLAYER] YouTube iFrame API ready.');
+            if (this.pendingServerState) {
+              const pending = this.pendingServerState;
+              this.pendingServerState = null;
+              this.applyServerState(pending.videoState, pending.serverTimestamp);
+            }
+          },
+          onStateChange: (event) => this.onYTStateChange(event)
+        }
+      });
+    } catch (err) {
+      console.warn('[PLAYER] Failed to instantiate YouTube player:', err);
+    }
+  }
+
+  initHTML5Player() {
+    if (!this.html5Player) return;
+
+    this.html5Player.addEventListener('play', () => {
+      if (this.activePlatform !== 'direct' || this.isRemoteUpdate) return;
+      this.currentStatus = 'PLAYING';
+      this.onLocalStateChange('PLAYING', this.html5Player.currentTime, this.currentVideoId);
+    });
+
+    this.html5Player.addEventListener('pause', () => {
+      if (this.activePlatform !== 'direct' || this.isRemoteUpdate) return;
+      this.currentStatus = 'PAUSED';
+      this.onLocalStateChange('PAUSED', this.html5Player.currentTime, this.currentVideoId);
+    });
+
+    this.html5Player.addEventListener('ended', () => {
+      if (this.activePlatform !== 'direct') return;
+      this.currentStatus = 'PAUSED';
+      this.onVideoEnded();
     });
   }
 
-  onPlayerReady(event) {
-    this.isReady = true;
-    console.log('[PLAYER] YouTube Player is ready.');
+  markRemoteUpdate(durationMs = 1200) {
+    this.isRemoteUpdate = true;
+    if (this.remoteUpdateTimer) {
+      clearTimeout(this.remoteUpdateTimer);
+    }
+    this.remoteUpdateTimer = setTimeout(() => {
+      this.isRemoteUpdate = false;
+      this.remoteUpdateTimer = null;
+    }, durationMs);
   }
 
-  onPlayerStateChange(event) {
-    if (!this.isReady || this.isRemoteUpdate) return;
+  onYTStateChange(event) {
+    if (!this.isReady || this.activePlatform !== 'youtube' || this.isRemoteUpdate) return;
 
     const state = event.data;
-    const currentTime = this.player.getCurrentTime();
+    const currentTime = this.ytPlayer.getCurrentTime ? this.ytPlayer.getCurrentTime() : 0;
+
+    // Keep currentVideoId in sync with the actual loaded video
+    try {
+      const data = this.ytPlayer.getVideoData && this.ytPlayer.getVideoData();
+      if (data && data.video_id) {
+        this.currentVideoId = data.video_id;
+      }
+    } catch (_) { /* ignore */ }
 
     if (state === window.YT.PlayerState.PLAYING) {
       this.currentStatus = 'PLAYING';
@@ -65,61 +121,133 @@ export class VideoPlayer {
     }
   }
 
-  // Authoritative Server State Sync Engine
-  applyServerState(state, serverTimestamp) {
-    if (!this.isReady || !this.player) return;
+  switchPlatform(platform) {
+    this.activePlatform = platform;
 
-    this.isRemoteUpdate = true;
+    const ytEl = document.getElementById('ytPlayer');
+    if (ytEl) ytEl.style.display = platform === 'youtube' ? 'block' : 'none';
+    if (this.html5Player) this.html5Player.style.display = platform === 'direct' ? 'block' : 'none';
+    if (this.genericPlayer) this.genericPlayer.style.display = (platform !== 'youtube' && platform !== 'direct') ? 'block' : 'none';
+  }
 
+  detectPlatform(videoId) {
+    if (videoId.startsWith('http://') || videoId.startsWith('https://') || videoId.endsWith('.mp4') || videoId.endsWith('.webm')) {
+      if (videoId.includes('vimeo.com')) return 'vimeo';
+      if (videoId.includes('twitch.tv')) return 'twitch';
+      return 'direct';
+    }
+    return 'youtube';
+  }
+
+  applyServerState(videoState, serverTimestamp) {
+    if (!videoState) return;
+
+    const videoId = videoState.videoId || 'dQw4w9WgXcQ';
+    const status = videoState.status || 'PAUSED';
+    let expectedTime = typeof videoState.currentTime === 'number' ? videoState.currentTime : 0.0;
+
+    // Prefer payload serverTimestamp when present (more accurate than WS envelope)
+    const stamp = videoState.serverTimestamp || serverTimestamp;
     const now = Date.now();
-    let expectedTime = state.currentTime;
-
-    if (state.status === 'PLAYING' && serverTimestamp) {
-      const elapsedSec = (now - serverTimestamp) / 1000.0;
-      expectedTime += elapsedSec;
+    if (status === 'PLAYING' && stamp) {
+      const elapsedSec = (now - stamp) / 1000.0;
+      if (elapsedSec > 0 && elapsedSec < 3600) {
+        expectedTime += elapsedSec;
+      }
     }
 
-    const playerTime = this.player.getCurrentTime();
-    const drift = Math.abs(playerTime - expectedTime);
+    const platform = this.detectPlatform(videoId);
 
-    // 1. If Video ID changed
-    if (this.currentVideoId !== state.videoId) {
-      this.currentVideoId = state.videoId;
-      this.currentStatus = state.status;
-      
-      if (state.status === 'PLAYING') {
-        this.player.loadVideoById({ videoId: state.videoId, startSeconds: expectedTime });
+    // Queue INIT_STATE / STATE_UPDATE until YouTube API is ready
+    if (platform === 'youtube' && (!this.ytPlayer || !this.isReady)) {
+      this.pendingServerState = { videoState, serverTimestamp: stamp };
+      this.currentVideoId = videoId;
+      this.currentStatus = status;
+      return;
+    }
+
+    if (this.activePlatform !== platform) {
+      this.switchPlatform(platform);
+    }
+
+    const videoChanged = this.currentVideoId !== videoId;
+    this.currentVideoId = videoId;
+    this.currentStatus = status;
+    this.markRemoteUpdate(videoChanged ? 2000 : 1200);
+
+    if (platform === 'youtube' && this.ytPlayer && this.isReady) {
+      if (videoChanged) {
+        this.ytPlayer.loadVideoById({
+          videoId,
+          startSeconds: Math.max(0, expectedTime)
+        });
+        if (status !== 'PLAYING') {
+          // loadVideoById autoplays; pause if room is paused
+          setTimeout(() => {
+            this.markRemoteUpdate(800);
+            if (this.ytPlayer && this.ytPlayer.pauseVideo) {
+              this.ytPlayer.pauseVideo();
+            }
+          }, 350);
+        }
       } else {
-        this.player.cueVideoById({ videoId: state.videoId, startSeconds: expectedTime });
+        const playerTime = this.ytPlayer.getCurrentTime ? this.ytPlayer.getCurrentTime() : 0;
+        const drift = Math.abs(playerTime - expectedTime);
+
+        if (drift > this.syncThreshold) {
+          this.ytPlayer.seekTo(expectedTime, true);
+        }
+
+        if (status === 'PLAYING') {
+          const state = this.ytPlayer.getPlayerState ? this.ytPlayer.getPlayerState() : -1;
+          if (state !== window.YT.PlayerState.PLAYING) {
+            this.ytPlayer.playVideo();
+          }
+        } else {
+          const state = this.ytPlayer.getPlayerState ? this.ytPlayer.getPlayerState() : -1;
+          if (state === window.YT.PlayerState.PLAYING) {
+            this.ytPlayer.pauseVideo();
+          }
+        }
       }
-    } else {
-      // 2. Check Drift (> 1.5s tolerance)
-      if (drift > this.syncThreshold) {
-        console.log(`[PLAYER] Drift detected (${drift.toFixed(2)}s). Resyncing to ${expectedTime.toFixed(2)}s...`);
-        this.player.seekTo(expectedTime, true);
+    } else if (platform === 'direct' && this.html5Player) {
+      if (this.html5Player.src !== videoId) {
+        this.html5Player.src = videoId;
       }
 
-      // 3. Status adjustment
-      if (state.status === 'PLAYING') {
-        const playerState = this.player.getPlayerState();
-        if (playerState !== window.YT.PlayerState.PLAYING && playerState !== window.YT.PlayerState.BUFFERING) {
-          this.player.playVideo();
-        }
-      } else if (state.status === 'PAUSED') {
-        const playerState = this.player.getPlayerState();
-        if (playerState === window.YT.PlayerState.PLAYING) {
-          this.player.pauseVideo();
-        }
+      const drift = Math.abs(this.html5Player.currentTime - expectedTime);
+      if (drift > this.syncThreshold) {
+        this.html5Player.currentTime = expectedTime;
+      }
+
+      if (status === 'PLAYING') {
+        this.html5Player.play().catch(() => {});
+      } else {
+        this.html5Player.pause();
+      }
+    } else if (this.genericPlayer) {
+      let embedUrl = videoId;
+      if (platform === 'vimeo') {
+        const match = videoId.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
+        const vimeoId = match ? match[1] : videoId;
+        embedUrl = `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
+      } else if (platform === 'twitch') {
+        embedUrl = `https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}`;
+      }
+
+      if (this.genericPlayer.src !== embedUrl) {
+        this.genericPlayer.src = embedUrl;
       }
     }
-
-    // Reset remote update guard after small delay to avoid event loopback
-    setTimeout(() => {
-      this.isRemoteUpdate = false;
-    }, 500);
   }
 
   getCurrentTime() {
-    return this.player && this.player.getCurrentTime ? this.player.getCurrentTime() : 0.0;
+    if (this.activePlatform === 'youtube' && this.ytPlayer && this.ytPlayer.getCurrentTime) {
+      return this.ytPlayer.getCurrentTime();
+    }
+    if (this.activePlatform === 'direct' && this.html5Player) {
+      return this.html5Player.currentTime || 0.0;
+    }
+    return 0.0;
   }
 }
