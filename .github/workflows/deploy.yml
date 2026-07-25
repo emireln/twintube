@@ -38,6 +38,73 @@ jobs:
           git commit -m "chore: bump version to v${{ steps.bump.outputs.version }} [skip ci]"
           git push
 
+  # Web app deploy must not depend on desktop artifact storage (quota was blocking VPS updates).
+  deploy:
+    needs: bump-version
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Sync VERSION after bump commit
+        run: git pull origin main
+
+      - name: Record expected commit
+        id: meta
+        run: |
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          command_timeout: 15m
+          script: |
+            set -e
+            cd "${{ secrets.VPS_APP_DIR }}"
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p downloads
+            chmod +x scripts/deploy-vps.sh
+            export VPS_APP_DIR="${{ secrets.VPS_APP_DIR }}"
+            ./scripts/deploy-vps.sh
+
+      - name: Verify live deployment
+        run: |
+          EXPECTED="${{ steps.meta.outputs.commit }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          echo "Waiting for containers to come up..."
+          sleep 8
+          for attempt in 1 2 3 4 5; do
+            BODY=$(curl -sf "https://twintube.site/api/version" || true)
+            if [ -n "$BODY" ]; then
+              DEPLOYED=$(echo "$BODY" | jq -r '.commit // empty')
+              LIVE_VERSION=$(echo "$BODY" | jq -r '.version // empty')
+              echo "Attempt $attempt: live commit=$DEPLOYED version=$LIVE_VERSION (expected commit=$EXPECTED version=$VERSION)"
+              if [ "$DEPLOYED" = "$EXPECTED" ]; then
+                echo "API deployment verified."
+                exit 0
+              fi
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::Live site did not report commit $EXPECTED after deploy."
+              curl -s "https://twintube.site/api/version" || true
+              exit 1
+            fi
+            sleep 6
+          done
+
+      - name: Deployment summary
+        run: |
+          echo "Deployed TwinTube v$(cat VERSION) (${{ steps.meta.outputs.commit }}) to https://twintube.site"
+
   build-desktop:
     needs: bump-version
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
@@ -112,39 +179,7 @@ jobs:
           PY
           ls -lah desktop-artifacts
 
-      - name: Upload desktop artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: twintube-windows-installer
-          path: desktop-artifacts/*
-          if-no-files-found: error
-          retention-days: 14
-
-  deploy:
-    needs: [bump-version, build-desktop]
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Sync VERSION after bump commit
-        run: git pull origin main
-
-      - name: Record expected commit
-        id: meta
-        run: |
-          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
-
-      - name: Download desktop artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: twintube-windows-installer
-          path: desktop-artifacts
-
+      # Upload straight to the VPS — avoids GitHub Actions artifact storage quota.
       - name: Publish installer to VPS downloads
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -157,50 +192,10 @@ jobs:
           strip_components: 1
           overwrite: true
 
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          command_timeout: 15m
-          script: |
-            set -e
-            cd "${{ secrets.VPS_APP_DIR }}"
-            git fetch origin main
-            git reset --hard origin/main
-            mkdir -p downloads
-            chmod +x scripts/deploy-vps.sh
-            export VPS_APP_DIR="${{ secrets.VPS_APP_DIR }}"
-            ./scripts/deploy-vps.sh
-
-      - name: Verify live deployment
+      - name: Verify desktop downloads
+        shell: bash
         run: |
-          EXPECTED="${{ steps.meta.outputs.commit }}"
-          VERSION="${{ steps.meta.outputs.version }}"
-          echo "Waiting for containers to come up..."
-          sleep 8
-          for attempt in 1 2 3 4 5; do
-            BODY=$(curl -sf "https://twintube.site/api/version" || true)
-            if [ -n "$BODY" ]; then
-              DEPLOYED=$(echo "$BODY" | jq -r '.commit // empty')
-              LIVE_VERSION=$(echo "$BODY" | jq -r '.version // empty')
-              echo "Attempt $attempt: live commit=$DEPLOYED version=$LIVE_VERSION (expected commit=$EXPECTED version=$VERSION)"
-              if [ "$DEPLOYED" = "$EXPECTED" ]; then
-                echo "API deployment verified."
-                break
-              fi
-            fi
-            if [ "$attempt" = "5" ]; then
-              echo "::error::Live site did not report commit $EXPECTED after deploy."
-              curl -s "https://twintube.site/api/version" || true
-              exit 1
-            fi
-            sleep 6
-          done
-
-          echo "Verifying desktop downloads..."
+          VERSION="$(tr -d '[:space:]' < VERSION)"
           for path in \
             "/downloads/TwinTube-Setup.exe" \
             "/downloads/TwinTube-Setup-${VERSION}.exe" \
@@ -214,8 +209,3 @@ jobs:
             fi
           done
           echo "Desktop downloads verified."
-
-      - name: Deployment summary
-        run: |
-          echo "Deployed TwinTube v$(cat VERSION) (${{ steps.meta.outputs.commit }}) to https://twintube.site"
-          echo "Windows installer: https://twintube.site/downloads/TwinTube-Setup.exe"

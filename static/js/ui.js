@@ -23,6 +23,33 @@ export class UIManager {
     this.initMobileRoomChrome();
     this.initSettingsLangPicker();
     this.initSettings();
+    this.initPasswordVisibility();
+  }
+
+  initPasswordVisibility() {
+    document.querySelectorAll('.password-field').forEach((wrap) => {
+      const input = wrap.querySelector('input');
+      const btn = wrap.querySelector('.password-toggle');
+      if (!input || !btn || btn.dataset.bound === '1') return;
+      btn.dataset.bound = '1';
+
+      const syncLabel = () => {
+        const visible = input.type === 'text';
+        const label = t(visible ? 'hide_password' : 'show_password');
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('data-i18n-title', visible ? 'hide_password' : 'show_password');
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = visible ? 'visibility_off' : 'visibility';
+      };
+
+      btn.addEventListener('click', () => {
+        input.type = input.type === 'password' ? 'text' : 'password';
+        syncLabel();
+      });
+
+      window.addEventListener('twintube:languagechange', syncLabel);
+    });
   }
 
   bindSettingsAuth(auth) {

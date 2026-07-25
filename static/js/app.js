@@ -455,6 +455,12 @@ class TwinTubeApp {
         const username = document.getElementById('regUser').value.trim();
         const email = document.getElementById('regEmail').value.trim();
         const password = document.getElementById('regPass').value.trim();
+        const confirm = document.getElementById('regPassConfirm')?.value.trim() || '';
+
+        if (password !== confirm) {
+          this.ui.showToast(t('password_mismatch'));
+          return;
+        }
 
         try {
           await this.auth.register(username, email, password);

@@ -7,6 +7,7 @@
   <meta name="description" content="Watch YouTube, Vimeo, Twitch, and direct videos synchronized in real-time with friends. Featuring live chat, collaborative playlists, and zero-config rooms.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
   <script>
     (function () {
       try {
@@ -124,7 +125,12 @@
         </div>
         <div>
           <label style="font-size: 12px; font-weight: 500;" data-i18n="password_optional">Password (optional)</label>
-          <input type="password" id="createRoomPassword" class="input-field" style="width: 100%; margin-top: 4px;" data-i18n-ph="password_optional_ph" placeholder="Leave blank for open room" minlength="4">
+          <div class="password-field" style="margin-top: 4px;">
+            <input type="password" id="createRoomPassword" class="input-field" data-i18n-ph="password_optional_ph" placeholder="Leave blank for open room" minlength="4" autocomplete="new-password">
+            <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
+              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            </button>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 10px;" id="btnConfirmCreateRoom" data-i18n="confirm_create_room">Create Room</button>
       </form>
@@ -144,7 +150,12 @@
       <form id="formJoinPassword" class="modal-body">
         <div>
           <label style="font-size: 12px; font-weight: 500;" data-i18n="room_password">Room password</label>
-          <input type="password" id="joinRoomPasswordInput" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="4">
+          <div class="password-field" style="margin-top: 4px;">
+            <input type="password" id="joinRoomPasswordInput" class="input-field" required minlength="4" autocomplete="current-password">
+            <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
+              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            </button>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="enter_room">Enter Room</button>
       </form>
@@ -170,7 +181,12 @@
         </div>
         <div>
           <label style="font-size: 12px; font-weight: 500;" data-i18n="password">Password</label>
-          <input type="password" id="loginPass" class="input-field" style="width: 100%; margin-top: 4px;" required>
+          <div class="password-field" style="margin-top: 4px;">
+            <input type="password" id="loginPass" class="input-field" required autocomplete="current-password">
+            <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
+              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            </button>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="login">Sign In</button>
       </form>
@@ -187,7 +203,21 @@
         </div>
         <div>
           <label style="font-size: 12px; font-weight: 500;" data-i18n="password">Password</label>
-          <input type="password" id="regPass" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="6">
+          <div class="password-field" style="margin-top: 4px;">
+            <input type="password" id="regPass" class="input-field" required minlength="6" autocomplete="new-password">
+            <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
+              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="confirm_password_create">Confirm password</label>
+          <div class="password-field" style="margin-top: 4px;">
+            <input type="password" id="regPassConfirm" class="input-field" required minlength="6" autocomplete="new-password">
+            <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
+              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+            </button>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="register">Create Account</button>
       </form>
