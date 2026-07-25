@@ -281,7 +281,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			}
 		}
 
-		target := room.Manager.GetOrCreateRoom(payload.RoomID)
+		target := room.Manager.OpenExistingRoom(payload.RoomID)
+		if target == nil {
+			sendError(c, "Room not found.")
+			return
+		}
 		if target.IsExpired() {
 			room.Manager.RemoveRoom(payload.RoomID)
 			sendError(c, "This room has expired.")

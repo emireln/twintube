@@ -210,7 +210,7 @@ func clientReadPump(c *room.Client) {
 		c.Conn.Close()
 	}()
 
-	c.Conn.SetReadLimit(4096)
+	c.Conn.SetReadLimit(32 * 1024)
 	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -352,7 +352,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			}
 		}
 
-		target := room.Manager.GetOrCreateRoom(payload.RoomID)
+		target := room.Manager.OpenExistingRoom(payload.RoomID)
+		if target == nil {
+			denyRoomJoin(c, "Room not found.")
+			return
+		}
 		if target.IsExpired() {
 			room.Manager.RemoveRoom(payload.RoomID)
 			denyRoomJoin(c, "This room has expired.")

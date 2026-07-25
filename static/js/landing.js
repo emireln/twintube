@@ -14,6 +14,21 @@ class LandingApp {
     this.init();
   }
 
+  consumeFlashToast() {
+    let key = '';
+    try {
+      key = sessionStorage.getItem('twintube_flash_toast') || '';
+      if (key) sessionStorage.removeItem('twintube_flash_toast');
+    } catch (_) {
+      return;
+    }
+    if (!key) return;
+    // Defer so the toast container is ready after auth/UI init.
+    setTimeout(() => {
+      this.ui.showToast(translateError(key, key));
+    }, 50);
+  }
+
   authHeaders(json = false) {
     const headers = {};
     if (json) headers['Content-Type'] = 'application/json';
@@ -30,6 +45,7 @@ class LandingApp {
     await this.auth.checkAuth();
     this.setupCreateRoom();
     this.updateAuthNavUI();
+    this.consumeFlashToast();
 
     this.ui.initMyRoomsModal(
       async () => {

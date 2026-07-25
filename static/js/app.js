@@ -614,8 +614,7 @@ class TwinTubeApp {
           document.body.classList.add('room-gated');
 
           if (msg.includes('too many')) {
-            this.ui.showToast(translateError(payload.message));
-            setTimeout(() => { window.location.href = '/'; }, 1200);
+            this.redirectHome('too_many_attempts');
             return;
           }
 
@@ -624,17 +623,22 @@ class TwinTubeApp {
         }
 
         if (msg.includes('not found')) {
-          this.ui.showToast(translateError(payload.message, 'room_not_found'));
-          setTimeout(() => { window.location.href = '/'; }, 1200);
+          this.redirectHome('room_not_found');
+          return;
+        }
+
+        if (msg.includes('expired')) {
+          sessionStorage.removeItem(this.joinTokenKey(this.roomId));
+          this.redirectHome('room_expired');
           return;
         }
 
         this.ui.showToast(translateError(payload.message));
-        if (msg.includes('expired')) {
-          sessionStorage.removeItem(this.joinTokenKey(this.roomId));
-          setTimeout(() => { window.location.href = '/'; }, 1200);
-        }
       }
+    });
+
+    this.ws.on('fatal', () => {
+      this.redirectHome('could_not_verify_access');
     });
 
     this.ws.connect();
@@ -652,7 +656,14 @@ class TwinTubeApp {
         data = null;
       }
       if (!resp.ok) {
-        return { error: data?.error || 'room_not_found', exists: false };
+        return {
+          error: data?.error || 'room_not_found',
+          exists: data?.exists === true,
+          expired: !!data?.expired || data?.error === 'room_expired',
+          name: data?.name || '',
+          requiresPassword: !!data?.requiresPassword,
+          isOwner: !!data?.isOwner
+        };
       }
       return data;
     } catch {
@@ -685,29 +696,36 @@ class TwinTubeApp {
     return data;
   }
 
+  // Leave the room page immediately and show a toast on the home page.
+  redirectHome(toastKey) {
+    this.accessGranted = false;
+    this.hasJoined = false;
+    if (this.ws) this.ws.disconnect(true);
+    try {
+      sessionStorage.setItem('twintube_flash_toast', toastKey || 'room_not_found');
+    } catch (_) { /* ignore */ }
+    window.location.replace('/');
+  }
+
   async resolveRoomAccess() {
     const info = await this.fetchRoomInfo();
     if (!info) {
-      this.ui.showToast(t('could_not_verify_access'));
-      setTimeout(() => { window.location.href = '/'; }, 1200);
+      this.redirectHome('could_not_verify_access');
       return false;
     }
 
     if (info.error && !info.exists) {
-      this.ui.showToast(translateError(info.error, 'room_not_found'));
-      setTimeout(() => { window.location.href = '/'; }, 1200);
+      this.redirectHome(info.error === 'invalid_room_code' ? 'invalid_room_code' : 'room_not_found');
       return false;
     }
 
     if (info.expired) {
-      this.ui.showToast(t('room_expired') || 'This room has expired.');
-      setTimeout(() => { window.location.href = '/'; }, 1200);
+      this.redirectHome('room_expired');
       return false;
     }
 
     if (!info.exists) {
-      this.ui.showToast(t('room_not_found'));
-      setTimeout(() => { window.location.href = '/'; }, 1200);
+      this.redirectHome('room_not_found');
       return false;
     }
 
@@ -725,13 +743,13 @@ class TwinTubeApp {
     if (!joinToken) {
       const pwd = await this.promptRoomPassword(info.name || this.roomId);
       if (!pwd) {
-        window.location.href = '/';
+        window.location.replace('/');
         return false;
       }
       try {
         await this.requestRoomAccess(this.roomId, pwd);
       } catch (err) {
-        this.ui.showToast(err.message || t('password_required'));
+        this.ui.showToast(translateError(err.message, 'password_required'));
         return this.resolveRoomAccess();
       }
     }

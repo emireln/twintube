@@ -214,10 +214,42 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 
 		rm.rooms[roomID] = room
 		go room.Run()
-		log.Printf("[ROOM] Created new room %s", roomID)
+		log.Printf("[ROOM] Created/Loaded Room %s", roomID)
 	}
 
 	return room
+}
+
+// OpenExistingRoom returns a room only if it already lives in memory or as a
+// persisted owned room. It never creates phantom rooms from typed URL codes.
+func (rm *RoomManager) OpenExistingRoom(roomID string) *Room {
+	if room := rm.GetRoom(roomID); room != nil {
+		return room
+	}
+
+	meta := rm.LookupJoinMeta(roomID)
+	if !meta.Found || meta.Expired {
+		return nil
+	}
+
+	return rm.GetOrCreateRoom(roomID)
+}
+
+// SendTo delivers a message to one client without evicting them on buffer pressure.
+// Returns false if the client is missing or their send buffer is full.
+func (r *Room) SendTo(clientID string, message WSMessage) bool {
+	r.mu.RLock()
+	client := r.Clients[clientID]
+	r.mu.RUnlock()
+	if client == nil {
+		return false
+	}
+	select {
+	case client.Send <- message:
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Room) Run() {
@@ -298,7 +330,8 @@ func (r *Room) Run() {
 
 // deliver fans out a message to all clients without using the Broadcast channel,
 // so it is safe to call from inside Run (Register/Unregister) as well as from
-// BroadcastSystemAlert / BroadcastUserList.
+// BroadcastSystemAlert / BroadcastUserList. Full buffers drop the message only —
+// they do not kick the client (signaling/voice bursts must not evict viewers).
 func (r *Room) deliver(message WSMessage) {
 	r.mu.RLock()
 	clients := make([]*Client, 0, len(r.Clients))
@@ -307,27 +340,13 @@ func (r *Room) deliver(message WSMessage) {
 	}
 	r.mu.RUnlock()
 
-	var stale []*Client
 	for _, client := range clients {
 		select {
 		case client.Send <- message:
 		default:
-			stale = append(stale, client)
+			// Drop for this client; keep them connected.
 		}
 	}
-
-	if len(stale) == 0 {
-		return
-	}
-
-	r.mu.Lock()
-	for _, client := range stale {
-		if _, ok := r.Clients[client.ID]; ok {
-			delete(r.Clients, client.ID)
-			close(client.Send)
-		}
-	}
-	r.mu.Unlock()
 }
 
 func (r *Room) GetCalculatedTime() float64 {

@@ -176,12 +176,22 @@ func (h *RoomAPIHandler) HandleRoomInfo(w http.ResponseWriter, r *http.Request) 
 	code = strings.TrimSpace(code)
 
 	if code == "" {
-		http.Error(w, `{"error":"Room code required"}`, http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":  "room_code_required",
+			"exists": false,
+		})
 		return
 	}
 
 	if !utils.IsValidRoomID(code) {
-		http.Error(w, `{"error":"Invalid room code"}`, http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":  "invalid_room_code",
+			"exists": false,
+		})
 		return
 	}
 
@@ -199,12 +209,41 @@ func (h *RoomAPIHandler) HandleRoomInfo(w http.ResponseWriter, r *http.Request) 
 	isOwner := userID != "" && info.OwnerID != "" && userID == info.OwnerID
 
 	w.Header().Set("Content-Type", "application/json")
+
+	if info.Expired {
+		w.WriteHeader(http.StatusGone)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":               info.ID,
+			"name":             info.Name,
+			"exists":           true,
+			"requiresPassword": info.RequiresPassword,
+			"expired":          true,
+			"isOwner":          isOwner,
+			"error":            "room_expired",
+		})
+		return
+	}
+
+	if !info.Exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":               code,
+			"name":             info.Name,
+			"exists":           false,
+			"requiresPassword": false,
+			"expired":          false,
+			"isOwner":          false,
+			"error":            "room_not_found",
+		})
+		return
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":               info.ID,
 		"name":             info.Name,
-		"exists":           info.Exists,
+		"exists":           true,
 		"requiresPassword": info.RequiresPassword,
-		"expired":          info.Expired,
+		"expired":          false,
 		"isOwner":          isOwner,
 	})
 }
@@ -231,11 +270,15 @@ func (h *RoomAPIHandler) HandleRoomAccess(w http.ResponseWriter, r *http.Request
 
 	meta := h.Manager.LookupJoinMeta(code)
 	if !meta.Found {
-		http.Error(w, `{"error":"Room not found."}`, http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "room_not_found"})
 		return
 	}
 	if meta.Expired {
-		http.Error(w, `{"error":"This room has expired."}`, http.StatusGone)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": "room_expired"})
 		return
 	}
 
