@@ -18,10 +18,10 @@ export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "==> Deploying TwinTube v${VERSION} (${GIT_COMMIT})"
 
-docker compose -f "$COMPOSE_FILE" pull --ignore-buildable 2>/dev/null || true
-docker compose -f "$COMPOSE_FILE" build --no-cache
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
-docker compose -f "$COMPOSE_FILE" ps
+docker compose --env-file .env -f "$COMPOSE_FILE" pull --ignore-buildable 2>/dev/null || true
+docker compose --env-file .env -f "$COMPOSE_FILE" build --no-cache
+docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans
+docker compose --env-file .env -f "$COMPOSE_FILE" ps
 
 # Prune old images (keep last deploy lean)
 docker image prune -f >/dev/null 2>&1 || true

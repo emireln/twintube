@@ -18,6 +18,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
     networks:
       - twintube_net
 
@@ -41,29 +43,9 @@ services:
     networks:
       - twintube_net
 
-  caddy:
-    image: caddy:2-alpine
-    container_name: twintube_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      ACME_EMAIL: ${ACME_EMAIL:-admin@twintube.site}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    networks:
-      - twintube_net
-
 networks:
   twintube_net:
     driver: bridge
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
