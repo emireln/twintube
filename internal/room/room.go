@@ -144,6 +144,12 @@ func (rm *RoomManager) CreateGuestRoom(roomID, name, passwordHash string, isPriv
 	defer rm.mu.Unlock()
 
 	if room, exists := rm.rooms[roomID]; exists {
+		room.mu.Lock()
+		room.Name = name
+		room.PasswordHash = passwordHash
+		room.IsPrivate = isPrivate
+		room.OwnerID = ""
+		room.mu.Unlock()
 		return room
 	}
 

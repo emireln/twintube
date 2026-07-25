@@ -58,6 +58,15 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+func JWTSecretBytes() []byte {
+	if len(jwtSecret) == 0 {
+		InitJWTSecret()
+	}
+	out := make([]byte, len(jwtSecret))
+	copy(out, jwtSecret)
+	return out
+}
+
 func GenerateJWTToken(userID, username string) (string, error) {
 	if len(jwtSecret) == 0 {
 		InitJWTSecret()

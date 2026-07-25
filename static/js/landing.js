@@ -61,6 +61,26 @@ class LandingApp {
     }
   }
 
+  joinTokenKey(roomId) {
+    return `twintube_join_token_${roomId}`;
+  }
+
+  async requestRoomAccess(roomId, password = '') {
+    const resp = await fetch(`/api/room/${encodeURIComponent(roomId)}/access`, {
+      method: 'POST',
+      headers: this.authHeaders(true),
+      body: JSON.stringify(password ? { password } : {})
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || 'Access denied');
+    }
+    if (data.joinToken) {
+      sessionStorage.setItem(this.joinTokenKey(roomId), data.joinToken);
+    }
+    return data;
+  }
+
   async createRoomRequest({ name = '', password = '' } = {}) {
     const resp = await fetch('/api/room/create', {
       method: 'POST',
@@ -72,7 +92,7 @@ class LandingApp {
       throw new Error(data.error || 'Failed to create room');
     }
     if (password && data.roomCode) {
-      sessionStorage.setItem(`twintube_room_pwd_${data.roomCode}`, password);
+      await this.requestRoomAccess(data.roomCode, password);
     }
     if (data.url) {
       window.location.href = data.url;
@@ -165,12 +185,16 @@ class LandingApp {
     }
 
     if (formJoinPassword) {
-      formJoinPassword.addEventListener('submit', (e) => {
+      formJoinPassword.addEventListener('submit', async (e) => {
         e.preventDefault();
         const pwd = document.getElementById('joinRoomPasswordInput')?.value || '';
         if (!this.pendingJoinCode || !pwd) return;
-        sessionStorage.setItem(`twintube_room_pwd_${this.pendingJoinCode}`, pwd);
-        window.location.href = `/room/${this.pendingJoinCode}`;
+        try {
+          await this.requestRoomAccess(this.pendingJoinCode, pwd);
+          window.location.href = `/room/${this.pendingJoinCode}`;
+        } catch (err) {
+          this.ui.showToast(err.message || t('password_required'));
+        }
       });
     }
 

@@ -1,5 +1,5 @@
 /* TwinTube - Google Material Design 3 Styling */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Google+Sans:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Roboto:wght@300;400;500;700&display=swap');
 
 :root {
   /* Color Palette - Light Mode (#5c5cff Blue Accent) */
@@ -24,7 +24,7 @@
   --md-shadow-3: 0 8px 24px rgba(31,35,40,0.16);
 
   --font-main: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-brand: 'Google Sans', 'Roboto', sans-serif;
+  --font-brand: 'Outfit', 'Roboto', sans-serif;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -81,6 +81,24 @@ body.room-body {
   overflow: hidden;
 }
 
+/* Hide room UI until server confirms join — devtools cannot interact with protected content */
+body.room-body.room-gated .app-container {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+body.room-body.room-gated .navbar .top-video-bar,
+body.room-body.room-gated .navbar .nav-actions {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.room-body.room-gated .modal-overlay.active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
 /* Header Navbar */
 .navbar {
   height: 64px;
@@ -111,11 +129,15 @@ body.room-body {
   gap: 10px;
   text-decoration: none;
   color: var(--md-on-surface);
-  font-family: var(--font-brand);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
   flex-shrink: 0;
+}
+
+.brand-wordmark {
+  font-family: var(--font-brand);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
 }
 
 .brand-icon-img {
@@ -124,8 +146,11 @@ body.room-body {
   object-fit: contain;
 }
 
-.brand span.accent {
-  color: var(--md-primary);
+.brand-wordmark .accent {
+  background: linear-gradient(120deg, var(--md-primary) 0%, #7a7aff 45%, var(--md-primary-hover) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Top Bar Video Search Form */
@@ -1684,9 +1709,8 @@ body.theater-mode .player-wrapper {
     gap: 8px;
   }
 
-  .brand {
-    font-size: 17px;
-    min-width: 0;
+  .brand-wordmark {
+    font-size: 18px;
   }
 
   .brand-icon-img {

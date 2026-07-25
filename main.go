@@ -63,6 +63,7 @@ func main() {
 	}
 
 	auth.InitJWTSecret()
+	room.SetJoinTokenSecret(auth.JWTSecretBytes())
 	security.ValidateJWTSecret()
 
 	if _, err := db.InitDB(*dbPath); err != nil {
@@ -91,6 +92,10 @@ func main() {
 	http.HandleFunc("/api/room/", security.Wrap(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/info") {
 			apiHandler.HandleRoomInfo(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/access") {
+			apiHandler.HandleRoomAccess(w, r)
 			return
 		}
 		http.NotFound(w, r)
@@ -308,11 +313,16 @@ func clientWritePump(c *room.Client) {
 func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 	switch msg.Action {
 	case "JOIN_ROOM":
+		if c.Room != nil {
+			sendError(c, "Already joined a room.")
+			return
+		}
+
 		var payload struct {
-			RoomID   string `json:"roomId"`
-			Nickname string `json:"nickname"`
-			Token    string `json:"token"`
-			Password string `json:"password"`
+			RoomID    string `json:"roomId"`
+			Nickname  string `json:"nickname"`
+			Token     string `json:"token"`
+			JoinToken string `json:"joinToken"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return
@@ -320,11 +330,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 
 		payload.RoomID = strings.TrimSpace(payload.RoomID)
 		if payload.RoomID == "" || !utils.IsValidRoomID(payload.RoomID) {
-			sendError(c, "Invalid room ID.")
+			denyRoomJoin(c, "Invalid room ID.")
 			return
 		}
 
-		payload.Password = strings.TrimSpace(payload.Password)
+		payload.JoinToken = strings.TrimSpace(payload.JoinToken)
 
 		c.IsGuest = true
 		if payload.Token != "" {
@@ -348,37 +358,40 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			}
 		}
 
+		meta := room.Manager.LookupJoinMeta(payload.RoomID)
+		if meta.Expired {
+			if db.Database != nil && meta.OwnerID != "" {
+				_ = db.Database.DeleteOwnedRoom(payload.RoomID, meta.OwnerID)
+			}
+			room.Manager.RemoveRoom(payload.RoomID)
+			denyRoomJoin(c, "This room has expired.")
+			return
+		}
+
 		if db.Database != nil {
-			if rec, err := db.Database.GetRoomByID(payload.RoomID); err == nil && rec != nil {
-				if rec.OwnerID != "" && rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
-					_ = db.Database.DeleteOwnedRoom(rec.ID, rec.OwnerID)
-					room.Manager.RemoveRoom(rec.ID)
-					sendError(c, "This room has expired.")
+			if rec, err := db.Database.GetRoomByID(payload.RoomID); err == nil && rec != nil && rec.OwnerID == "" {
+				_ = db.Database.DeleteEphemeralRoomData(payload.RoomID)
+			}
+		}
+
+		isOwner := c.UserID != "" && meta.OwnerID != "" && c.UserID == meta.OwnerID
+		if meta.RequiresPassword() && !isOwner {
+			if !room.ValidateJoinToken(payload.JoinToken, payload.RoomID) {
+				failKey := payload.RoomID + "|" + c.RemoteIP
+				if !joinPasswordLimiter.Allow(failKey) {
+					denyRoomJoin(c, "Too many failed password attempts. Try again later.")
 					return
 				}
-				if rec.OwnerID == "" {
-					_ = db.Database.DeleteEphemeralRoomData(payload.RoomID)
-				}
+				denyRoomJoin(c, "Room access denied. Verify the password first.")
+				return
 			}
 		}
 
 		target := room.Manager.GetOrCreateRoom(payload.RoomID)
 		if target.IsExpired() {
 			room.Manager.RemoveRoom(payload.RoomID)
-			sendError(c, "This room has expired.")
+			denyRoomJoin(c, "This room has expired.")
 			return
-		}
-		if hash := target.PasswordHashValue(); hash != "" {
-			isOwner := c.UserID != "" && c.UserID == target.OwnerIDValue()
-			if !isOwner && !auth.CheckPasswordHash(payload.Password, hash) {
-				failKey := payload.RoomID + "|" + c.RemoteIP
-				if !joinPasswordLimiter.Allow(failKey) {
-					sendError(c, "Too many failed password attempts. Try again later.")
-					return
-				}
-				sendError(c, "Incorrect room password.")
-				return
-			}
 		}
 
 		c.RoomID = payload.RoomID
@@ -602,4 +615,16 @@ func sendError(c *room.Client, message string) {
 	case c.Send <- room.WSMessage{Action: "ERROR", Payload: raw}:
 	default:
 	}
+}
+
+func denyRoomJoin(c *room.Client, message string) {
+	sendError(c, message)
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = c.Conn.WriteMessage(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "room access denied"),
+		)
+		_ = c.Conn.Close()
+	}()
 }

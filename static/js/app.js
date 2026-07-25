@@ -24,6 +24,7 @@ class TwinTubeApp {
     this.playlist = [];
     this.forceNextSync = false;
 
+    document.body.classList.add('room-gated');
     this.init();
   }
 
@@ -391,6 +392,7 @@ class TwinTubeApp {
 
     this.ws.on('INIT_STATE', (payload, timestamp) => {
       this.hasJoined = true;
+      document.body.classList.remove('room-gated');
       this.currentClientID = payload.clientId || '';
       this.isHost = payload.isHost;
       this.playlist = payload.playlist || [];
@@ -461,9 +463,10 @@ class TwinTubeApp {
       if (payload && payload.message) {
         const msg = String(payload.message).toLowerCase();
 
-        if (msg.includes('password')) {
-          sessionStorage.removeItem(`twintube_room_pwd_${this.roomId}`);
+        if (msg.includes('password') || msg.includes('access denied') || msg.includes('verify the password')) {
+          sessionStorage.removeItem(this.joinTokenKey(this.roomId));
           this.hasJoined = false;
+          document.body.classList.add('room-gated');
 
           if (msg.includes('too many')) {
             this.ui.showToast(payload.message);
@@ -471,13 +474,13 @@ class TwinTubeApp {
             return;
           }
 
-          this.handleWrongRoomPassword(payload.message);
+          this.handleWrongRoomAccess(payload.message);
           return;
         }
 
         this.ui.showToast(payload.message);
         if (msg.includes('expired')) {
-          sessionStorage.removeItem(`twintube_room_pwd_${this.roomId}`);
+          sessionStorage.removeItem(this.joinTokenKey(this.roomId));
           setTimeout(() => { window.location.href = '/'; }, 1200);
         }
       }
@@ -498,13 +501,38 @@ class TwinTubeApp {
     }
   }
 
-  roomPasswordKey() {
-    return `twintube_room_pwd_${this.roomId}`;
+  joinTokenKey(roomId = this.roomId) {
+    return `twintube_join_token_${roomId}`;
+  }
+
+  async requestRoomAccess(roomId, password = '') {
+    const resp = await fetch(`/api/room/${encodeURIComponent(roomId)}/access`, {
+      method: 'POST',
+      headers: this.authHeaders(true),
+      body: JSON.stringify(password ? { password } : {})
+    });
+    let data = {};
+    try {
+      data = await resp.json();
+    } catch {
+      data = {};
+    }
+    if (!resp.ok) {
+      throw new Error(data.error || 'Access denied');
+    }
+    if (data.joinToken) {
+      sessionStorage.setItem(this.joinTokenKey(roomId), data.joinToken);
+    }
+    return data;
   }
 
   async resolveRoomAccess() {
     const info = await this.fetchRoomInfo();
-    if (!info) return true;
+    if (!info) {
+      this.ui.showToast('Could not verify room access.');
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+      return false;
+    }
 
     if (info.expired) {
       this.ui.showToast(t('room_expired') || 'This room has expired.');
@@ -513,28 +541,34 @@ class TwinTubeApp {
     }
 
     if (info.isOwner) {
-      sessionStorage.removeItem(this.roomPasswordKey());
+      sessionStorage.removeItem(this.joinTokenKey());
       return true;
     }
 
     if (!info.requiresPassword) {
+      sessionStorage.removeItem(this.joinTokenKey());
       return true;
     }
 
-    let pwd = sessionStorage.getItem(this.roomPasswordKey());
-    if (!pwd) {
-      pwd = await this.promptRoomPassword(info.name || this.roomId);
+    let joinToken = sessionStorage.getItem(this.joinTokenKey());
+    if (!joinToken) {
+      const pwd = await this.promptRoomPassword(info.name || this.roomId);
       if (!pwd) {
         window.location.href = '/';
         return false;
       }
-      sessionStorage.setItem(this.roomPasswordKey(), pwd);
+      try {
+        await this.requestRoomAccess(this.roomId, pwd);
+      } catch (err) {
+        this.ui.showToast(err.message || t('password_required'));
+        return this.resolveRoomAccess();
+      }
     }
 
     return true;
   }
 
-  async handleWrongRoomPassword(message) {
+  async handleWrongRoomAccess(message) {
     this.ui.showToast(message || t('password_required'));
 
     const info = await this.fetchRoomInfo();
@@ -545,8 +579,13 @@ class TwinTubeApp {
       return;
     }
 
-    sessionStorage.setItem(this.roomPasswordKey(), pwd);
-    this.joinRoom();
+    try {
+      await this.requestRoomAccess(this.roomId, pwd);
+      this.joinRoom();
+    } catch (err) {
+      this.ui.showToast(err.message || t('password_required'));
+      await this.handleWrongRoomAccess(err.message);
+    }
   }
 
   promptRoomPassword(roomName) {
@@ -624,9 +663,9 @@ class TwinTubeApp {
       payload.token = this.auth.getToken();
     }
 
-    const storedPwd = sessionStorage.getItem(this.roomPasswordKey());
-    if (storedPwd) {
-      payload.password = storedPwd;
+    const joinToken = sessionStorage.getItem(this.joinTokenKey());
+    if (joinToken) {
+      payload.joinToken = joinToken;
     }
 
     this.ws.sendAction('JOIN_ROOM', payload);
