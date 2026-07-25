@@ -79,7 +79,7 @@ type Room struct {
 	Clients       map[string]*Client
 	Playlist      []db.PlaylistItem
 	Moments       []Moment
-	QueueLocked   bool
+	Permissions   RoomPermissions
 	SkipVotes     map[string]bool
 	SkipVideoID   string
 	CohostUserIDs map[string]bool
@@ -161,6 +161,7 @@ func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 		Clients:       make(map[string]*Client),
 		Playlist:      make([]db.PlaylistItem, 0),
 		Moments:       make([]Moment, 0),
+		Permissions:   DefaultRoomPermissions(),
 		SkipVotes:     make(map[string]bool),
 		CohostUserIDs: make(map[string]bool),
 		Register:      make(chan *Client),
@@ -442,7 +443,7 @@ func (r *Room) SendInitState(client *Client) {
 	for _, m := range r.Moments {
 		if m.Status == "approved" {
 			approved = append(approved, m)
-		} else if m.Status == "pending" && client.CanControlPlayback() {
+		} else if m.Status == "pending" && client.isController() {
 			pending = append(pending, m)
 		}
 	}
@@ -455,9 +456,12 @@ func (r *Room) SendInitState(client *Client) {
 		"isGuest":  client.IsGuest,
 		"hostId":   r.HostID,
 		"role":     client.RoleName(),
-		"canControlPlayback": client.CanControlPlayback(),
-		"canModerateQueue":   client.CanModerateQueue(),
-		"queueLocked":        r.QueueLocked,
+		"canControlPlayback": meta["canControlPlayback"],
+		"canModerateQueue":   meta["canModerateQueue"],
+		"canAddQueue":        meta["canAddQueue"],
+		"canSubmitMoment":    meta["canSubmitMoment"],
+		"canJumpMoment":      meta["canJumpMoment"],
+		"permissions":        meta["permissions"],
 		"skipVotes":          meta["skipVotes"],
 		"skipNeeded":         meta["skipNeeded"],
 		"hasSkipVoted":       meta["hasSkipVoted"],

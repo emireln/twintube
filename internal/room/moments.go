@@ -26,7 +26,7 @@ type Moment struct {
 func (r *Room) SubmitMoment(from *Client, atSeconds float64, label string) (Moment, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if from == nil {
+	if from == nil || !r.clientCanSubmitMomentLocked(from) {
 		return Moment{}, false
 	}
 	if r.State.MediaKind == "live" || !r.State.Seekable {
@@ -59,7 +59,7 @@ func (r *Room) SubmitMoment(from *Client, atSeconds float64, label string) (Mome
 func (r *Room) setMomentStatus(from *Client, momentID, status string) (Moment, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if from == nil || !from.CanControlPlayback() {
+	if from == nil || !from.isController() {
 		return Moment{}, false
 	}
 	for i := range r.Moments {
@@ -129,7 +129,7 @@ func (r *Room) NotifyApproversPending(m Moment) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, c := range r.Clients {
-		if c.CanControlPlayback() {
+		if c.isController() {
 			select {
 			case c.Send <- msg:
 			default:

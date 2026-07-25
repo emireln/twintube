@@ -7,35 +7,68 @@
   <meta name="description" content="Real-time synchronized video watching room.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
 </head>
 <body class="room-body">
 
-  <!-- Top Navigation Bar -->
-  <header class="navbar">
-    <a href="/" class="brand">
+  <!-- Mobile top chrome (phone / narrow tablet) -->
+  <header class="mobile-room-bar" id="mobileRoomBar">
+    <button type="button" class="tool-btn mobile-bar-btn" id="btnOpenRoomDrawer" data-i18n-title="open_menu" title="Menu" aria-label="Menu" aria-controls="roomNavbar" aria-expanded="false">
+      <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+    </button>
+    <a href="/" class="brand mobile-brand">
       <img src="/static/logo.svg" alt="TwinTube Logo" class="brand-icon-img">
       <span class="brand-wordmark">Twin<span class="accent">Tube</span></span>
     </a>
+    <button type="button" class="mobile-room-code" id="btnMobileCopyRoom" hidden data-i18n-title="copy_link_title" title="Copy room link">
+      <span class="material-symbols-outlined" aria-hidden="true">link</span>
+      <code id="mobileRoomCodeText">--------</code>
+    </button>
+    <button type="button" class="tool-btn tool-btn-primary mobile-bar-btn" id="btnMobileOpenAdd" data-i18n-title="add_video" title="Add Video" aria-label="Add video">
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
+    </button>
+  </header>
 
-    <!-- Top Bar Video Link Search Form -->
+  <div class="room-drawer-backdrop" id="roomDrawerBackdrop" hidden></div>
+
+  <!-- Desktop top bar / Mobile left drawer -->
+  <header class="navbar room-side-drawer" id="roomNavbar">
+    <div class="drawer-header">
+      <a href="/" class="brand">
+        <img src="/static/logo.svg" alt="TwinTube Logo" class="brand-icon-img">
+        <span class="brand-wordmark">Twin<span class="accent">Tube</span></span>
+      </a>
+      <button type="button" class="tool-btn drawer-close-btn" id="btnCloseRoomDrawer" data-i18n-title="close" title="Close" aria-label="Close menu">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <p class="drawer-section-label" data-i18n="drawer_add_video">Add video</p>
     <form class="top-video-bar" id="topVideoForm">
       <div class="media-mode-toggle" role="group" aria-label="Add media">
-        <button type="button" class="media-mode-btn active" id="btnMediaModeLink" data-mode="link" data-i18n="media_mode_link">Link</button>
-        <button type="button" class="media-mode-btn" id="btnMediaModeLocal" data-mode="local" data-i18n="media_mode_local">Local</button>
+        <button type="button" class="media-mode-btn active" id="btnMediaModeLink" data-mode="link" data-i18n-title="media_mode_link" title="Link" aria-label="Link">
+          <span class="material-symbols-outlined" aria-hidden="true">link</span>
+        </button>
+        <button type="button" class="media-mode-btn" id="btnMediaModeLocal" data-mode="local" data-i18n-title="media_mode_local" title="Local" aria-label="Local">
+          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
+        </button>
       </div>
       <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
-      <button type="button" class="btn btn-secondary btn-nav" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" hidden>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <span data-i18n="local_file_choose_short">Choose file</span>
+      <button type="button" class="tool-btn" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" aria-label="Choose file" hidden>
+        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
       </button>
       <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
-      <button type="submit" class="btn btn-primary btn-nav" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span data-i18n="add_video">Add</span>
+      <button type="submit" class="tool-btn tool-btn-primary" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video" aria-label="Add">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
       </button>
     </form>
 
+    <p class="drawer-section-label" data-i18n="drawer_room">Room</p>
     <div class="nav-actions">
+      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener noreferrer" class="nav-icon-btn support-btn room-bmc-btn" id="btnSupport" data-i18n-title="support_coffee" title="Support" aria-label="Buy Me a Coffee">
+        <img src="/static/bmc-logo.svg" alt="" class="bmc-logo-img" width="20" height="20">
+      </a>
+
       <!-- Theme Toggle -->
       <button class="nav-icon-btn" id="btnThemeToggle" data-i18n-title="theme_toggle" title="Toggle Light/Dark Theme">
         <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
@@ -122,6 +155,39 @@
 
         <!-- Floating Reactions Overlay -->
         <div class="reaction-overlay" id="reactionOverlay"></div>
+
+        <!-- Compact reaction dock (works in normal + theater) -->
+        <div class="reaction-dock" id="reactionDock">
+          <div class="reaction-tray" id="reactionTray" hidden role="menu" aria-label="Reactions">
+            <button type="button" class="reaction-chip" data-gif="happy.webp" data-i18n-title="reaction_happy" title="Happy" aria-label="Happy">
+              <img src="/static/gifs/happy.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="energetic.webp" data-i18n-title="reaction_energetic" title="Energetic" aria-label="Energetic">
+              <img src="/static/gifs/energetic.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="tired.webp" data-i18n-title="reaction_tired" title="Tired" aria-label="Tired">
+              <img src="/static/gifs/tired.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="stressed.webp" data-i18n-title="reaction_stressed" title="Stressed" aria-label="Stressed">
+              <img src="/static/gifs/stressed.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="heart.webp" data-i18n-title="reaction_heart" title="Heart" aria-label="Heart">
+              <img src="/static/gifs/heart.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="lmao.webp" data-i18n-title="reaction_lmao" title="LMAO" aria-label="LMAO">
+              <img src="/static/gifs/lmao.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="popcorn.webp" data-i18n-title="reaction_popcorn" title="Popcorn" aria-label="Popcorn">
+              <img src="/static/gifs/popcorn.webp" alt="">
+            </button>
+            <button type="button" class="reaction-chip" data-gif="monkey-no-look.webp" data-i18n-title="reaction_no_look" title="No look" aria-label="No look">
+              <img src="/static/gifs/monkey-no-look.webp" alt="">
+            </button>
+          </div>
+          <button type="button" class="tool-btn reaction-launch" id="btnReactions" data-i18n-title="reactions" title="Reactions" aria-label="Reactions" aria-expanded="false" aria-controls="reactionTray">
+            <span class="material-symbols-outlined" aria-hidden="true">mood</span>
+          </button>
+        </div>
       </div>
 
       <!-- Ambient Video Info Bar -->
@@ -147,45 +213,48 @@
           </div>
         </div>
 
-        <div class="player-controls-meta">
-          <div class="skip-controls" id="skipControls">
-            <button type="button" class="btn btn-secondary btn-skip-vote" id="btnVoteSkip" data-i18n-title="vote_skip" title="Vote to skip">
-              <span data-i18n="vote_skip">Vote skip</span>
-              <span class="skip-tally" id="skipTally">0/1</span>
+        <div class="player-controls-meta" role="toolbar" aria-label="Room controls">
+          <div class="control-cluster" id="voiceControls">
+            <button type="button" class="tool-btn" id="btnVoiceToggle" data-i18n-title="voice_join" title="Join voice" aria-label="Join voice">
+              <span class="material-symbols-outlined" aria-hidden="true">mic</span>
             </button>
-            <button type="button" class="btn btn-secondary btn-skip-now" id="btnSkipNow" hidden data-i18n="skip_now">Skip now</button>
-          </div>
-          <div class="voice-controls" id="voiceControls">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnVoiceToggle" data-i18n="voice_join">Join voice</button>
-            <button type="button" class="btn btn-primary btn-sm" id="btnPushToTalk" hidden data-i18n="push_to_talk">Hold to talk</button>
-            <span class="voice-hint" id="voiceHint" hidden data-i18n="voice_space_hint">Hold Space to talk</span>
-          </div>
-          <div class="video-reaction-bar" id="videoReactionBar">
-            <button class="reaction-btn" data-gif="happy.webp" title="Happy Reaction">
-              <img src="/static/gifs/happy.webp" alt="Happy">
-            </button>
-            <button class="reaction-btn" data-gif="energetic.webp" title="Energetic Reaction">
-              <img src="/static/gifs/energetic.webp" alt="Energetic">
-            </button>
-            <button class="reaction-btn" data-gif="tired.webp" title="Tired Reaction">
-              <img src="/static/gifs/tired.webp" alt="Tired">
-            </button>
-            <button class="reaction-btn" data-gif="stressed.webp" title="Stressed Reaction">
-              <img src="/static/gifs/stressed.webp" alt="Stressed">
+            <button type="button" class="tool-btn tool-btn-accent" id="btnPushToTalk" hidden data-i18n-title="push_to_talk" title="Hold to talk" aria-label="Hold to talk">
+              <span class="material-symbols-outlined" aria-hidden="true">keyboard_voice</span>
             </button>
           </div>
 
-          <!-- Resync Button -->
-          <button class="btn btn-secondary btn-nav" id="btnResync" data-i18n-title="resync_title" title="Force Sync to Server Position">
-            <svg viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M160-160v-80h110l-16-14q-52-46-73-105t-21-119q0-111 66.5-197.5T400-790v84q-72 26-116 88.5T240-478q0 45 17 87.5t53 78.5l10 10v-98h80v240H160Zm400-10v-84q72-26 116-88.5T720-482q0-45-17-87.5T650-648l-10-10v98h-80v-240h240v80H690l16 14q49 49 71.5 106.5T800-482q0 111-66.5 197.5T560-170Z"/></svg>
-            <span data-i18n="resync">Resync</span>
+          <div class="control-divider" aria-hidden="true"></div>
+
+          <button type="button" class="tool-btn" id="btnResync" data-i18n-title="resync_title" title="Force Sync to Server Position" aria-label="Resync">
+            <span class="material-symbols-outlined" aria-hidden="true">sync</span>
           </button>
-
-          <!-- Theater Mode Toggle Button -->
-          <button class="nav-icon-btn" id="btnTheaterMode" data-i18n-title="theater_mode" title="Toggle Theater Mode">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <button type="button" class="tool-btn" id="btnTheaterMode" data-i18n-title="theater_mode" title="Toggle Theater Mode" aria-label="Theater mode">
+            <span class="material-symbols-outlined" aria-hidden="true">crop_16_9</span>
+          </button>
+          <button type="button" class="tool-btn moments-launch" id="btnMoments" data-i18n-title="moments" title="Moments" aria-label="Moments" aria-expanded="false" aria-controls="momentsPanel">
+            <span class="material-symbols-outlined" aria-hidden="true">bookmarks</span>
+            <span class="tool-count" id="momentsCount" hidden>0</span>
+          </button>
+          <button type="button" class="tool-btn" id="btnRoomPerms" hidden data-i18n-title="room_permissions" title="Room permissions" aria-label="Room permissions">
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
           </button>
         </div>
+
+        <section class="moments-panel" id="momentsPanel" hidden aria-label="Moments">
+          <header class="moments-panel-header">
+            <div>
+              <strong data-i18n="moments">Moments</strong>
+              <span data-i18n="moments_hint">Jump back to saved highlights</span>
+            </div>
+            <button type="button" class="btn btn-primary moments-save-btn" id="btnSaveMoment" data-i18n-title="save_moment" title="Save moment" aria-label="Save moment">
+              <span class="material-symbols-outlined" aria-hidden="true">bookmark_add</span>
+              <span data-i18n="save_moment">Save moment</span>
+            </button>
+          </header>
+          <div class="moments-pending" id="momentsPending" hidden></div>
+          <div class="moments-approved" id="momentsApproved"></div>
+          <p class="moments-empty" id="momentsEmpty" data-i18n="moments_empty">No saved moments yet.</p>
+        </section>
       </div>
     </section>
 
@@ -211,13 +280,6 @@
 
       <!-- Tab 1: Live Chat -->
       <div class="tab-content active" id="chatTab">
-        <div class="moments-strip">
-          <div class="moments-toolbar">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnSaveMoment" data-i18n="save_moment">Save moment</button>
-          </div>
-          <div class="moments-pending" id="momentsPending" hidden></div>
-          <div class="moments-approved" id="momentsApproved"></div>
-        </div>
         <div class="chat-messages" id="chatMessages"></div>
 
         <!-- Chat Form with Emoji Picker -->
@@ -248,10 +310,7 @@
       <!-- Tab 2: Playlist Queue -->
       <div class="tab-content" id="queueTab">
         <div class="queue-toolbar" id="queueToolbar">
-          <button type="button" class="btn btn-secondary btn-sm" id="btnQueueLock" hidden>
-            <span data-i18n="lock_queue">Lock queue</span>
-          </button>
-          <span class="queue-lock-hint" id="queueLockHint" hidden data-i18n="queue_locked_hint">Queue is locked</span>
+          <span class="queue-lock-hint" id="queueLockHint" hidden data-i18n="queue_add_restricted">Only hosts can add to the queue</span>
         </div>
         <div class="queue-list" id="queueList"></div>
       </div>
@@ -263,6 +322,26 @@
       </div>
     </section>
   </main>
+
+  <!-- Mobile bottom tabs -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Room sections">
+    <button type="button" class="mobile-nav-btn tab-btn active" data-tab="chatTab">
+      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
+      <span data-i18n="chat_tab">Chat</span>
+    </button>
+    <button type="button" class="mobile-nav-btn tab-btn" data-tab="queueTab">
+      <span class="material-symbols-outlined" aria-hidden="true">playlist_play</span>
+      <span data-i18n="queue_tab">Queue</span>
+      <span class="mobile-nav-badge" id="mobileQueueBadge">0</span>
+    </button>
+    <button type="button" class="mobile-nav-btn tab-btn" data-tab="viewersTab">
+      <span class="material-symbols-outlined" aria-hidden="true">group</span>
+      <span data-i18n="viewers_tab">Viewers</span>
+      <span class="mobile-nav-badge" id="mobileViewersBadge">1</span>
+    </button>
+  </nav>
+
+
 
   <!-- Join Password Modal -->
   <div class="modal-overlay" id="joinPasswordModal">
@@ -280,6 +359,42 @@
       </form>
       <div class="modal-footer" style="justify-content: center;">
         <button class="btn btn-secondary" id="btnCloseJoinPassword" type="button" data-i18n="cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Room Permissions Modal (host) -->
+  <div class="modal-overlay" id="roomPermsModal">
+    <div class="modal-card room-perms-card">
+      <h2 style="margin: 0 0 4px; font-size: 20px;" data-i18n="room_permissions">Room permissions</h2>
+      <p style="margin: 0 0 16px; color: var(--md-on-surface-variant); font-size: 13px;" data-i18n="room_permissions_desc">
+        Rooms are open by default. Turn options off to restrict viewers.
+      </p>
+      <div class="modal-body room-perms-list">
+        <label class="perm-row">
+          <span data-i18n="perm_playback">Anyone can pause / play</span>
+          <input type="checkbox" id="permPlayback" checked>
+        </label>
+        <label class="perm-row">
+          <span data-i18n="perm_add_queue">Anyone can add videos</span>
+          <input type="checkbox" id="permAddQueue" checked>
+        </label>
+        <label class="perm-row">
+          <span data-i18n="perm_mod_queue">Anyone can reorder / remove queue</span>
+          <input type="checkbox" id="permModQueue" checked>
+        </label>
+        <label class="perm-row">
+          <span data-i18n="perm_moments">Anyone can save moments</span>
+          <input type="checkbox" id="permMoments" checked>
+        </label>
+        <label class="perm-row">
+          <span data-i18n="perm_jump">Anyone can jump everyone to a moment</span>
+          <input type="checkbox" id="permJump" checked>
+        </label>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-secondary" id="btnCloseRoomPerms" type="button" data-i18n="close">Close</button>
+        <button class="btn btn-primary" id="btnSaveRoomPerms" type="button" data-i18n="save_permissions">Save</button>
       </div>
     </div>
   </div>

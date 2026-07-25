@@ -38,7 +38,8 @@ func ApplyHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", strings.Join([]string{
 		"default-src 'self'",
 		"script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.youtube.com/iframe_api https://s.ytimg.com https://cdn.jsdelivr.net",
-		"style-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"font-src 'self' https://fonts.gstatic.com data:",
 		"img-src 'self' data: blob: https:",
 		"media-src 'self' blob: https: http:",
 		"connect-src 'self' ws: wss: https:",

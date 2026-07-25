@@ -20,6 +20,7 @@ export class UIManager {
     this.settingsAuth = null;
     this.initTheme();
     this.initTabs();
+    this.initMobileRoomChrome();
     this.initSettingsLangPicker();
     this.initSettings();
   }
@@ -493,23 +494,65 @@ export class UIManager {
     }
   }
 
-  // Tab Navigation
+  // Tab Navigation (panel tabs + mobile bottom nav)
   initTabs() {
-    const tabButtons = document.querySelectorAll('.tab-btn[data-tab]');
-    tabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tabId = btn.getAttribute('data-tab');
-        
-        tabButtons.forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-        btn.classList.add('active');
-        const targetContent = document.getElementById(tabId);
-        if (targetContent) {
-          targetContent.classList.add('active');
-        }
+    const activate = (tabId) => {
+      if (!tabId) return;
+      document.querySelectorAll('.tab-btn[data-tab]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
       });
+      document.querySelectorAll('.tab-content').forEach((c) => {
+        c.classList.toggle('active', c.id === tabId);
+      });
+    };
+
+    document.querySelectorAll('.tab-btn[data-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => activate(btn.getAttribute('data-tab')));
     });
+  }
+
+  initMobileRoomChrome() {
+    const openBtn = document.getElementById('btnOpenRoomDrawer');
+    const closeBtn = document.getElementById('btnCloseRoomDrawer');
+    const backdrop = document.getElementById('roomDrawerBackdrop');
+    const addBtn = document.getElementById('btnMobileOpenAdd');
+    const input = document.getElementById('topVideoInput');
+
+    const open = (focusAdd = false) => {
+      document.body.classList.add('room-drawer-open');
+      if (backdrop) backdrop.hidden = false;
+      if (openBtn) openBtn.setAttribute('aria-expanded', 'true');
+      if (focusAdd && input) {
+        setTimeout(() => input.focus(), 220);
+      }
+    };
+
+    const close = () => {
+      document.body.classList.remove('room-drawer-open');
+      if (backdrop) backdrop.hidden = true;
+      if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    openBtn?.addEventListener('click', () => open(false));
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+    addBtn?.addEventListener('click', () => open(true));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('room-drawer-open')) {
+        close();
+      }
+    });
+
+    // Close drawer after successful-looking add on mobile
+    const form = document.getElementById('topVideoForm');
+    form?.addEventListener('submit', () => {
+      if (window.matchMedia('(max-width: 900px)').matches) {
+        setTimeout(close, 80);
+      }
+    });
+
+    this.closeRoomDrawer = close;
   }
 
   // Toast Notifications
@@ -564,7 +607,7 @@ export class UIManager {
       el.className = 'msg-item';
       const initial = (msg.nickname || 'G').charAt(0).toUpperCase();
       el.innerHTML = `
-        <div class="msg-avatar">${initial}</div>
+        ${this.avatarHTML(msg.avatarUrl, initial)}
         <div class="msg-body">
           <div class="msg-header">
             <span class="msg-author">${this.escapeHTML(msg.nickname)}</span>
@@ -573,6 +616,7 @@ export class UIManager {
           <div class="msg-text">${this.escapeHTML(msg.content)}</div>
         </div>
       `;
+      this.bindAvatarFallback(el);
     }
 
     container.appendChild(el);
@@ -592,6 +636,12 @@ export class UIManager {
     const onReorder = options.onReorder || null;
 
     if (counter) counter.textContent = playlist.length;
+    const mobileBadge = document.getElementById('mobileQueueBadge');
+    if (mobileBadge) {
+      mobileBadge.textContent = String(playlist.length);
+      mobileBadge.hidden = playlist.length === 0;
+      mobileBadge.dataset.empty = playlist.length === 0 ? '1' : '0';
+    }
     container.innerHTML = '';
 
     if (playlist.length === 0) {
@@ -691,6 +741,12 @@ export class UIManager {
     }
 
     if (counter) counter.textContent = users.length;
+    const mobileBadge = document.getElementById('mobileViewersBadge');
+    if (mobileBadge) {
+      mobileBadge.textContent = String(users.length);
+      mobileBadge.hidden = users.length === 0;
+      mobileBadge.dataset.empty = users.length === 0 ? '1' : '0';
+    }
     container.innerHTML = '';
 
     users.forEach(user => {
@@ -718,7 +774,7 @@ export class UIManager {
 
       el.innerHTML = `
         <div class="viewer-info">
-          <div class="msg-avatar">${initial}</div>
+          ${this.avatarHTML(user.avatarUrl, initial)}
           <div>
             <span style="font-weight: 500; font-size: 14px;">${this.escapeHTML(user.nickname)}</span>
             ${isYou ? `<span style="font-size: 11px; opacity: 0.7;"> ${t('viewer_you')}</span>` : ''}
@@ -733,6 +789,7 @@ export class UIManager {
           ${roleActions}
         </div>
       `;
+      this.bindAvatarFallback(el);
 
       const btnTransfer = el.querySelector('.btn-transfer');
       if (btnTransfer) btnTransfer.addEventListener('click', () => onTransferHost(user.id));
@@ -753,6 +810,23 @@ export class UIManager {
     });
   }
 
+  avatarHTML(avatarUrl, initial) {
+    const safeInitial = this.escapeHTML(initial || 'G');
+    const safeURL = this.escapeHTML(avatarUrl || '');
+    return `
+      <div class="msg-avatar">
+        <span>${safeInitial}</span>
+        ${safeURL ? `<img class="avatar-image" src="${safeURL}" alt="">` : ''}
+      </div>
+    `;
+  }
+
+  bindAvatarFallback(root) {
+    root.querySelectorAll('.avatar-image').forEach((image) => {
+      image.addEventListener('error', () => image.remove(), { once: true });
+    });
+  }
+
   formatMomentClock(seconds) {
     const total = Math.max(0, Math.round(Number(seconds) || 0));
     const m = Math.floor(total / 60);
@@ -763,24 +837,34 @@ export class UIManager {
   renderMoments(approved = [], pending = [], options = {}) {
     const approvedEl = document.getElementById('momentsApproved');
     const pendingEl = document.getElementById('momentsPending');
+    const emptyEl = document.getElementById('momentsEmpty');
+    const countEl = document.getElementById('momentsCount');
     if (!approvedEl || !pendingEl) return;
 
     const canControl = !!options.canControlPlayback;
+    const canJump = options.canJumpMoment !== undefined ? !!options.canJumpMoment : canControl;
     const onJump = options.onJump || (() => {});
     const onApprove = options.onApprove || (() => {});
     const onReject = options.onReject || (() => {});
+    const visibleCount = approved.length + (canControl ? pending.length : 0);
+
+    if (countEl) {
+      countEl.textContent = String(visibleCount);
+      countEl.hidden = visibleCount === 0;
+    }
+    if (emptyEl) emptyEl.hidden = visibleCount !== 0;
 
     approvedEl.innerHTML = '';
     approved.forEach((m) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'moment-chip';
-      chip.title = canControl ? t('jump_to_moment') : t('moment_host_only');
+      chip.title = canJump ? t('jump_to_moment') : t('moment_host_only');
       const label = m.label ? ` · ${this.escapeHTML(m.label)}` : '';
       chip.innerHTML = `<span class="moment-time">${this.formatMomentClock(m.atSeconds)}</span>${label}`;
       chip.addEventListener('click', () => {
-        if (!canControl) {
-          this.showToast(t('moment_host_only'));
+        if (!canJump) {
+          this.showToast(t('permission_denied'));
           return;
         }
         onJump(m.id);

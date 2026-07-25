@@ -23,12 +23,18 @@ class TwinTubeApp {
     this.currentClientID = '';
     this.isHost = false;
     this.isCohost = false;
-    this.canControlPlayback = false;
-    this.canModerateQueue = false;
-    this.queueLocked = false;
-    this.skipVotes = 0;
-    this.skipNeeded = 1;
-    this.hasSkipVoted = false;
+    this.canControlPlayback = true;
+    this.canModerateQueue = true;
+    this.canAddQueue = true;
+    this.canSubmitMoment = true;
+    this.canJumpMoment = true;
+    this.permissions = {
+      anyonePlayback: true,
+      anyoneAddQueue: true,
+      anyoneModQueue: true,
+      anyoneMoment: true,
+      anyoneJump: true
+    };
     this.approvedMoments = [];
     this.pendingMoments = [];
     this.hasJoined = false;
@@ -228,15 +234,26 @@ class TwinTubeApp {
     // Room Code Chip & Copy Link Button
     const btnCopy = document.getElementById('btnCopyRoom');
     const roomCodeText = document.getElementById('roomCodeText');
+    const mobileCopy = document.getElementById('btnMobileCopyRoom');
+    const mobileCode = document.getElementById('mobileRoomCodeText');
+
+    const copyRoomLink = () => {
+      const fullURL = `${window.location.origin}/room/${this.roomId}`;
+      navigator.clipboard.writeText(fullURL).then(() => {
+        this.ui.showToast(t('link_copied'));
+      });
+    };
+
     if (btnCopy && roomCodeText) {
       btnCopy.style.display = 'inline-flex';
       roomCodeText.textContent = this.roomId;
-      btnCopy.addEventListener('click', () => {
-        const fullURL = `${window.location.origin}/room/${this.roomId}`;
-        navigator.clipboard.writeText(fullURL).then(() => {
-          this.ui.showToast(t('link_copied'));
-        });
-      });
+      btnCopy.addEventListener('click', copyRoomLink);
+    }
+
+    if (mobileCopy && mobileCode) {
+      mobileCopy.hidden = false;
+      mobileCode.textContent = this.roomId;
+      mobileCopy.addEventListener('click', copyRoomLink);
     }
 
     // New Room Button
@@ -270,33 +287,21 @@ class TwinTubeApp {
       });
     }
 
-    const btnVoteSkip = document.getElementById('btnVoteSkip');
-    if (btnVoteSkip) {
-      btnVoteSkip.addEventListener('click', () => {
-        this.hasSkipVoted = true;
-        btnVoteSkip.disabled = true;
-        this.ws.sendAction('VOTE_SKIP');
-      });
-    }
-    const btnSkipNow = document.getElementById('btnSkipNow');
-    if (btnSkipNow) {
-      btnSkipNow.addEventListener('click', () => this.ws.sendAction('SKIP_NOW'));
-    }
-    const btnQueueLock = document.getElementById('btnQueueLock');
-    if (btnQueueLock) {
-      btnQueueLock.addEventListener('click', () => {
-        this.ws.sendAction('SET_QUEUE_LOCK', { locked: !this.queueLocked });
-      });
-    }
-
     const btnSaveMoment = document.getElementById('btnSaveMoment');
     if (btnSaveMoment) {
       btnSaveMoment.addEventListener('click', () => {
+        if (!this.canSubmitMoment) {
+          this.ui.showToast(t('permission_denied'));
+          return;
+        }
         const atSeconds = this.player ? this.player.getCurrentTime() : 0;
         this.ws.sendAction('SUBMIT_MOMENT', { atSeconds });
       });
     }
 
+    this.initReactionDock();
+    this.initMomentsUI();
+    this.initRoomPermissionsUI();
     this.initVoiceControls();
 
     // Theater Mode Toggle
@@ -310,25 +315,16 @@ class TwinTubeApp {
       });
     }
 
-    // Video Noto GIF Reactions
-    const reactionButtons = document.querySelectorAll('#videoReactionBar .reaction-btn');
-    reactionButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.classList.add('is-active');
-        setTimeout(() => btn.classList.remove('is-active'), 250);
-        const gif = btn.getAttribute('data-gif');
-        if (gif) {
-          this.ws.sendAction('VIDEO_REACTION', { reaction: gif });
-        }
-      });
-    });
-
     // Top Video Link Form Submission
     const topVideoForm = document.getElementById('topVideoForm');
     const topVideoInput = document.getElementById('topVideoInput');
     if (topVideoForm && topVideoInput) {
       topVideoForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (!this.canAddQueue) {
+          this.ui.showToast(t('permission_denied'));
+          return;
+        }
         if (this.mediaAddMode === 'local') return;
         const url = topVideoInput.value.trim();
         if (url) {
@@ -537,6 +533,7 @@ class TwinTubeApp {
   initPlayer() {
     this.player = new VideoPlayer(
       (status, currentTime, videoId) => {
+        if (!this.canControlPlayback) return;
         const meta = this.player && this.player.getPlaybackMeta
           ? this.player.getPlaybackMeta()
           : {};
@@ -562,6 +559,10 @@ class TwinTubeApp {
   }
 
   async addLocalVideoFile(file) {
+    if (!this.canAddQueue) {
+      this.ui.showToast(t('permission_denied'));
+      return;
+    }
     this.ui.showToast(t('local_file_hashing'));
     try {
       const { videoId, entry } = await registerLocalFileFromPicker(file);
@@ -682,27 +683,40 @@ class TwinTubeApp {
   applyRoleState(payload = {}) {
     if (typeof payload.isHost === 'boolean') this.isHost = payload.isHost;
     if (typeof payload.isCohost === 'boolean') this.isCohost = payload.isCohost;
-    if (typeof payload.canControlPlayback === 'boolean') {
-      this.canControlPlayback = payload.canControlPlayback;
-    } else {
-      this.canControlPlayback = !!(this.isHost || this.isCohost);
+    if (payload.permissions && typeof payload.permissions === 'object') {
+      this.permissions = { ...this.permissions, ...payload.permissions };
     }
-    if (typeof payload.canModerateQueue === 'boolean') {
-      this.canModerateQueue = payload.canModerateQueue;
-    } else {
-      this.canModerateQueue = !!(this.isHost || this.isCohost);
-    }
-    if (typeof payload.queueLocked === 'boolean') this.queueLocked = payload.queueLocked;
-    if (typeof payload.skipVotes === 'number') this.skipVotes = payload.skipVotes;
-    if (typeof payload.skipNeeded === 'number') this.skipNeeded = payload.skipNeeded;
-    if (typeof payload.hasSkipVoted === 'boolean') this.hasSkipVoted = payload.hasSkipVoted;
 
     const me = this.lastUsers.find((u) => u.id === this.currentClientID);
     if (me) {
       this.isHost = !!me.isHost;
       this.isCohost = !!me.isCohost;
-      this.canControlPlayback = this.isHost || this.isCohost;
-      this.canModerateQueue = this.isHost || this.isCohost;
+    }
+
+    if (typeof payload.canControlPlayback === 'boolean') {
+      this.canControlPlayback = payload.canControlPlayback;
+    } else {
+      this.canControlPlayback = !!(this.isHost || this.isCohost || this.permissions.anyonePlayback);
+    }
+    if (typeof payload.canModerateQueue === 'boolean') {
+      this.canModerateQueue = payload.canModerateQueue;
+    } else {
+      this.canModerateQueue = !!(this.isHost || this.isCohost || this.permissions.anyoneModQueue);
+    }
+    if (typeof payload.canAddQueue === 'boolean') {
+      this.canAddQueue = payload.canAddQueue;
+    } else {
+      this.canAddQueue = !!(this.isHost || this.isCohost || this.permissions.anyoneAddQueue);
+    }
+    if (typeof payload.canSubmitMoment === 'boolean') {
+      this.canSubmitMoment = payload.canSubmitMoment;
+    } else {
+      this.canSubmitMoment = !!(this.isHost || this.isCohost || this.permissions.anyoneMoment);
+    }
+    if (typeof payload.canJumpMoment === 'boolean') {
+      this.canJumpMoment = payload.canJumpMoment;
+    } else {
+      this.canJumpMoment = !!(this.isHost || this.isCohost || this.permissions.anyoneJump);
     }
 
     const hostBadge = document.getElementById('hostBadge');
@@ -710,33 +724,157 @@ class TwinTubeApp {
     const cohostBadge = document.getElementById('cohostBadge');
     if (cohostBadge) cohostBadge.style.display = (!this.isHost && this.isCohost) ? 'inline-flex' : 'none';
 
-    const btnSkipNow = document.getElementById('btnSkipNow');
-    if (btnSkipNow) btnSkipNow.hidden = !this.canControlPlayback;
+    const btnRoomPerms = document.getElementById('btnRoomPerms');
+    if (btnRoomPerms) btnRoomPerms.hidden = !this.isHost;
 
-    const skipTally = document.getElementById('skipTally');
-    if (skipTally) skipTally.textContent = `${this.skipVotes}/${this.skipNeeded || 1}`;
-
-    const btnVoteSkip = document.getElementById('btnVoteSkip');
-    if (btnVoteSkip) btnVoteSkip.disabled = !!this.hasSkipVoted;
-
-    const btnQueueLock = document.getElementById('btnQueueLock');
-    if (btnQueueLock) {
-      btnQueueLock.hidden = !this.canModerateQueue;
-      btnQueueLock.textContent = this.queueLocked ? t('unlock_queue') : t('lock_queue');
-    }
     const queueLockHint = document.getElementById('queueLockHint');
     if (queueLockHint) {
-      queueLockHint.hidden = !this.queueLocked;
+      queueLockHint.hidden = this.canAddQueue;
     }
 
+    const topVideoForm = document.getElementById('topVideoForm');
+    if (topVideoForm) {
+      topVideoForm.classList.toggle('is-restricted', !this.canAddQueue);
+      topVideoForm.querySelectorAll('input, button').forEach((el) => {
+        if (el.id === 'btnMediaModeLink' || el.id === 'btnMediaModeLocal') {
+          el.disabled = !this.canAddQueue;
+        } else if (el.tagName === 'INPUT' || el.type === 'submit' || el.id === 'btnAddVideoLink' || el.id === 'btnAddLocalVideo') {
+          el.disabled = !this.canAddQueue;
+        }
+      });
+    }
+
+    const btnMobileOpenAdd = document.getElementById('btnMobileOpenAdd');
+    if (btnMobileOpenAdd) {
+      btnMobileOpenAdd.hidden = !this.canAddQueue;
+      btnMobileOpenAdd.disabled = !this.canAddQueue;
+    }
+
+    const btnSaveMoment = document.getElementById('btnSaveMoment');
+    if (btnSaveMoment) btnSaveMoment.hidden = !this.canSubmitMoment;
+
+    this.syncPermissionForm();
     this.renderQueue();
     this.renderMomentsList();
   }
 
+  syncPermissionForm() {
+    const map = {
+      permPlayback: 'anyonePlayback',
+      permAddQueue: 'anyoneAddQueue',
+      permModQueue: 'anyoneModQueue',
+      permMoments: 'anyoneMoment',
+      permJump: 'anyoneJump'
+    };
+    Object.entries(map).forEach(([id, key]) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = !!this.permissions[key];
+    });
+  }
+
+  initReactionDock() {
+    const launch = document.getElementById('btnReactions');
+    const tray = document.getElementById('reactionTray');
+    if (!launch || !tray) return;
+
+    const closeTray = () => {
+      tray.hidden = true;
+      launch.classList.remove('is-active');
+      launch.setAttribute('aria-expanded', 'false');
+    };
+
+    launch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = tray.hidden;
+      tray.hidden = !open;
+      launch.classList.toggle('is-active', open);
+      launch.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    tray.querySelectorAll('.reaction-chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const gif = btn.getAttribute('data-gif');
+        if (gif) this.ws.sendAction('VIDEO_REACTION', { reaction: gif });
+        closeTray();
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      const dock = document.getElementById('reactionDock');
+      if (!dock || dock.contains(e.target)) return;
+      closeTray();
+    });
+  }
+
+  initRoomPermissionsUI() {
+    const modal = document.getElementById('roomPermsModal');
+    const btnOpen = document.getElementById('btnRoomPerms');
+    const btnClose = document.getElementById('btnCloseRoomPerms');
+    const btnSave = document.getElementById('btnSaveRoomPerms');
+    if (!modal || !btnOpen) return;
+
+    const close = () => modal.classList.remove('active');
+    btnOpen.addEventListener('click', () => {
+      this.syncPermissionForm();
+      modal.classList.add('active');
+    });
+    if (btnClose) btnClose.addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
+    });
+    if (btnSave) {
+      btnSave.addEventListener('click', () => {
+        const next = {
+          anyonePlayback: !!document.getElementById('permPlayback')?.checked,
+          anyoneAddQueue: !!document.getElementById('permAddQueue')?.checked,
+          anyoneModQueue: !!document.getElementById('permModQueue')?.checked,
+          anyoneMoment: !!document.getElementById('permMoments')?.checked,
+          anyoneJump: !!document.getElementById('permJump')?.checked
+        };
+        this.ws.sendAction('SET_ROOM_PERMISSIONS', next);
+        this.ui.showToast(t('permissions_saved'));
+        close();
+      });
+    }
+  }
+
+  initMomentsUI() {
+    const button = document.getElementById('btnMoments');
+    const panel = document.getElementById('momentsPanel');
+    if (!button || !panel) return;
+
+    const close = () => {
+      panel.hidden = true;
+      button.classList.remove('is-active');
+      button.setAttribute('aria-expanded', 'false');
+    };
+
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = panel.hidden;
+      panel.hidden = !open;
+      button.classList.toggle('is-active', open);
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  }
+
   renderMomentsList() {
     this.ui.renderMoments(this.approvedMoments, this.pendingMoments, {
-      canControlPlayback: this.canControlPlayback,
-      onJump: (momentId) => this.ws.sendAction('JUMP_TO_MOMENT', { momentId }),
+      canControlPlayback: this.isHost || this.isCohost,
+      canJumpMoment: this.canJumpMoment,
+      onJump: (momentId) => {
+        if (!this.canJumpMoment) {
+          this.ui.showToast(t('permission_denied'));
+          return;
+        }
+        this.ws.sendAction('JUMP_TO_MOMENT', { momentId });
+      },
       onApprove: (momentId) => this.ws.sendAction('APPROVE_MOMENT', { momentId }),
       onReject: (momentId) => this.ws.sendAction('REJECT_MOMENT', { momentId })
     });
@@ -758,13 +896,19 @@ class TwinTubeApp {
         }
         const btnToggle = document.getElementById('btnVoiceToggle');
         const btnPtt = document.getElementById('btnPushToTalk');
-        const hint = document.getElementById('voiceHint');
         if (btnToggle) {
-          btnToggle.textContent = status.joined ? t('voice_leave') : t('voice_join');
+          const key = status.joined ? 'voice_leave' : 'voice_join';
+          const label = t(key);
+          btnToggle.setAttribute('title', label);
+          btnToggle.setAttribute('data-tooltip', label);
+          btnToggle.setAttribute('aria-label', label);
+          btnToggle.setAttribute('data-i18n-title', key);
+          btnToggle.classList.toggle('is-active', !!status.joined);
+          const icon = btnToggle.querySelector('.material-symbols-outlined');
+          if (icon) icon.textContent = status.joined ? 'mic_off' : 'mic';
         }
-        if (btnPtt) btnPtt.hidden = !status.joined;
-        if (hint) hint.hidden = !status.joined;
         if (btnPtt) {
+          btnPtt.hidden = !status.joined;
           btnPtt.classList.toggle('is-talking', !!status.speaking);
         }
       }
@@ -782,7 +926,11 @@ class TwinTubeApp {
     }
     const btnPtt = document.getElementById('btnPushToTalk');
     if (btnPtt) {
-      const down = (e) => { e.preventDefault(); this.voice.setPTT(true); };
+      const down = (e) => {
+        e.preventDefault();
+        this.voice.resumeRemoteAudio();
+        this.voice.setPTT(true);
+      };
       const up = (e) => { e.preventDefault(); this.voice.setPTT(false); };
       btnPtt.addEventListener('mousedown', down);
       btnPtt.addEventListener('mouseup', up);
@@ -875,31 +1023,28 @@ class TwinTubeApp {
 
     this.ws.on('RTC_OFFER', (payload) => {
       if (this.voice && payload?.fromId && payload?.sdp) {
-        this.voice.handleOffer(payload.fromId, payload.sdp);
+        this.voice.handleOffer(payload.fromId, payload.sdp).catch((err) => {
+          console.warn('[VOICE] Failed to handle offer:', err);
+        });
       }
     });
     this.ws.on('RTC_ANSWER', (payload) => {
       if (this.voice && payload?.fromId && payload?.sdp) {
-        this.voice.handleAnswer(payload.fromId, payload.sdp);
+        this.voice.handleAnswer(payload.fromId, payload.sdp).catch((err) => {
+          console.warn('[VOICE] Failed to handle answer:', err);
+        });
       }
     });
     this.ws.on('RTC_ICE', (payload) => {
       if (this.voice && payload?.fromId && payload?.candidate) {
-        this.voice.handleIce(payload.fromId, payload.candidate);
+        this.voice.handleIce(payload.fromId, payload.candidate).catch((err) => {
+          console.warn('[VOICE] Failed to handle ICE:', err);
+        });
       }
     });
 
     this.ws.on('ROOM_META', (payload) => {
-      const prevVotes = this.skipVotes;
       this.applyRoleState(payload || {});
-      if ((payload?.skipVotes || 0) === 0) {
-        this.hasSkipVoted = false;
-        const btn = document.getElementById('btnVoteSkip');
-        if (btn) btn.disabled = false;
-      } else if (payload?.skipVotes > prevVotes && this.hasSkipVoted) {
-        const btn = document.getElementById('btnVoteSkip');
-        if (btn) btn.disabled = true;
-      }
     });
 
     this.ws.on('MOMENT_SUBMITTED', () => {
@@ -939,6 +1084,10 @@ class TwinTubeApp {
     this.ws.on('ERROR', (payload) => {
       if (payload && payload.message) {
         const msg = String(payload.message).toLowerCase();
+
+        if (msg === 'voice_full' && this.voice?.joined) {
+          this.voice.leave();
+        }
 
         if (msg.includes('password') || msg.includes('access denied') || msg.includes('verify the password')) {
           sessionStorage.removeItem(this.joinTokenKey(this.roomId));
@@ -1155,7 +1304,10 @@ class TwinTubeApp {
   }
 
   renderFloatingReaction(reaction, nickname) {
-    const allowed = new Set(['happy.webp', 'energetic.webp', 'stressed.webp', 'tired.webp']);
+    const allowed = new Set([
+      'happy.webp', 'energetic.webp', 'tired.webp', 'stressed.webp',
+      'heart.webp', 'lmao.webp', 'popcorn.webp', 'monkey-no-look.webp'
+    ]);
     if (!allowed.has(reaction)) return;
 
     const overlay = document.getElementById('reactionOverlay');

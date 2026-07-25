@@ -14,7 +14,7 @@ export class VoiceChat {
     this.speaking = false;
     this.pttHeld = false;
     this.localStream = null;
-    this.peers = new Map(); // clientId -> { pc, audio }
+    this.peers = new Map(); // clientId -> { pc, audio, pendingIce }
     this.iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
     this.boundKeyDown = (e) => this.onKeyDown(e);
     this.boundKeyUp = (e) => this.onKeyUp(e);
@@ -64,7 +64,14 @@ export class VoiceChat {
       return false;
     }
     for (const peer of peers) {
-      await this.ensurePeer(peer.id, true);
+      // One deterministic offerer prevents both sides entering have-local-offer.
+      if (this.getClientId() < peer.id) {
+        try {
+          await this.ensurePeer(peer.id, true);
+        } catch (_) {
+          this.closePeer(peer.id);
+        }
+      }
     }
     return true;
   }
@@ -91,6 +98,7 @@ export class VoiceChat {
 
   setPTT(held) {
     if (!this.joined || !this.localStream) return;
+    if (held) this.resumeRemoteAudio();
     this.pttHeld = held;
     this.speaking = held;
     this.muted = !held;
@@ -118,7 +126,7 @@ export class VoiceChat {
     if (this.peers.size >= MAX_VOICE_PEERS) return;
 
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
-    const entry = { pc, audio: null };
+    const entry = { pc, audio: null, pendingIce: [] };
     this.peers.set(remoteId, entry);
 
     if (this.localStream) {
@@ -144,12 +152,19 @@ export class VoiceChat {
         entry.audio = audio;
       }
       audio.srcObject = ev.streams[0];
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          // A later push-to-talk gesture retries playback.
+        });
+      }
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         this.closePeer(remoteId);
       }
+      this.emit();
     };
 
     if (isInitiator) {
@@ -179,6 +194,7 @@ export class VoiceChat {
     const entry = this.peers.get(fromId);
     if (!entry) return;
     await entry.pc.setRemoteDescription(sdp);
+    await this.flushPendingIce(entry);
     const answer = await entry.pc.createAnswer();
     await entry.pc.setLocalDescription(answer);
     this.sendAction('RTC_ANSWER', {
@@ -191,26 +207,52 @@ export class VoiceChat {
     const entry = this.peers.get(fromId);
     if (!entry) return;
     await entry.pc.setRemoteDescription(sdp);
+    await this.flushPendingIce(entry);
   }
 
   async handleIce(fromId, candidate) {
     const entry = this.peers.get(fromId);
     if (!entry || !candidate) return;
+    if (!entry.pc.remoteDescription) {
+      entry.pendingIce.push(candidate);
+      return;
+    }
     try {
       await entry.pc.addIceCandidate(candidate);
     } catch (_) { /* ignore stale */ }
+  }
+
+  async flushPendingIce(entry) {
+    if (!entry?.pc?.remoteDescription || !entry.pendingIce?.length) return;
+    const queued = entry.pendingIce.splice(0);
+    for (const candidate of queued) {
+      try {
+        await entry.pc.addIceCandidate(candidate);
+      } catch (_) { /* ignore stale */ }
+    }
   }
 
   handlePeerJoined(remoteId) {
     if (!this.joined || remoteId === this.getClientId()) return;
     // Only the lexicographically smaller id initiates to avoid glare.
     if (this.getClientId() < remoteId) {
-      this.ensurePeer(remoteId, true);
+      this.ensurePeer(remoteId, true).catch(() => this.closePeer(remoteId));
     }
   }
 
   handlePeerLeft(remoteId) {
     this.closePeer(remoteId);
+  }
+
+  resumeRemoteAudio() {
+    for (const { audio } of this.peers.values()) {
+      if (audio) {
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {});
+        }
+      }
+    }
   }
 
   emit() {

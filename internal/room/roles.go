@@ -8,11 +8,27 @@ import (
 	"twintube/internal/db"
 )
 
-func (c *Client) CanControlPlayback() bool {
-	return c != nil && (c.IsHost || c.IsCohost)
+// RoomPermissions controls what viewers may do. Host/co-host always bypass.
+// Defaults are fully open.
+type RoomPermissions struct {
+	AnyonePlayback bool `json:"anyonePlayback"`
+	AnyoneAddQueue bool `json:"anyoneAddQueue"`
+	AnyoneModQueue bool `json:"anyoneModQueue"`
+	AnyoneMoment   bool `json:"anyoneMoment"`
+	AnyoneJump     bool `json:"anyoneJump"`
 }
 
-func (c *Client) CanModerateQueue() bool {
+func DefaultRoomPermissions() RoomPermissions {
+	return RoomPermissions{
+		AnyonePlayback: true,
+		AnyoneAddQueue: true,
+		AnyoneModQueue: true,
+		AnyoneMoment:   true,
+		AnyoneJump:     true,
+	}
+}
+
+func (c *Client) isController() bool {
 	return c != nil && (c.IsHost || c.IsCohost)
 }
 
@@ -29,17 +45,119 @@ func (c *Client) RoleName() string {
 	return "viewer"
 }
 
-func (r *Room) CanClientAddToQueue(c *Client) bool {
+func (r *Room) SnapshotPermissions() RoomPermissions {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.Permissions
+}
+
+func (r *Room) SetPermissions(from *Client, next RoomPermissions) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if from == nil || !from.IsHost {
+		return false
+	}
+	r.Permissions = next
+	return true
+}
+
+func (r *Room) clientCanPlaybackLocked(c *Client) bool {
 	if c == nil {
 		return false
 	}
-	if c.CanModerateQueue() {
+	if c.isController() {
 		return true
 	}
+	return r.Permissions.AnyonePlayback
+}
+
+func (r *Room) clientCanAddQueueLocked(c *Client) bool {
+	if c == nil {
+		return false
+	}
+	if c.isController() {
+		return true
+	}
+	return r.Permissions.AnyoneAddQueue
+}
+
+func (r *Room) clientCanModQueueLocked(c *Client) bool {
+	if c == nil {
+		return false
+	}
+	if c.isController() {
+		return true
+	}
+	return r.Permissions.AnyoneModQueue
+}
+
+func (r *Room) clientCanSubmitMomentLocked(c *Client) bool {
+	if c == nil {
+		return false
+	}
+	if c.isController() {
+		return true
+	}
+	return r.Permissions.AnyoneMoment
+}
+
+func (r *Room) clientCanJumpMomentLocked(c *Client) bool {
+	if c == nil {
+		return false
+	}
+	if c.isController() {
+		return true
+	}
+	return r.Permissions.AnyoneJump
+}
+
+func (r *Room) ClientCanPlayback(c *Client) bool {
 	r.mu.RLock()
-	locked := r.QueueLocked
-	r.mu.RUnlock()
-	return !locked
+	defer r.mu.RUnlock()
+	return r.clientCanPlaybackLocked(c)
+}
+
+func (r *Room) ClientCanAddQueue(c *Client) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.clientCanAddQueueLocked(c)
+}
+
+func (r *Room) ClientCanModQueue(c *Client) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.clientCanModQueueLocked(c)
+}
+
+func (r *Room) ClientCanSubmitMoment(c *Client) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.clientCanSubmitMomentLocked(c)
+}
+
+func (r *Room) ClientCanJumpMoment(c *Client) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.clientCanJumpMomentLocked(c)
+}
+
+// Deprecated aliases kept for older call sites during transition.
+func (c *Client) CanControlPlayback() bool {
+	if c == nil || c.Room == nil {
+		return c != nil && c.isController()
+	}
+	return c.Room.ClientCanPlayback(c)
+}
+
+func (c *Client) CanModerateQueue() bool {
+	if c == nil || c.Room == nil {
+		return c != nil && c.isController()
+	}
+	return c.Room.ClientCanModQueue(c)
+}
+
+func (r *Room) CanClientAddToQueue(c *Client) bool {
+	return r.ClientCanAddQueue(c)
 }
 
 func (r *Room) restoreCohostOnJoinLocked(client *Client) {
@@ -118,22 +236,6 @@ func (r *Room) RevokeCohost(from *Client, targetClientID string) (string, bool) 
 	return target.Nickname, true
 }
 
-func (r *Room) SetQueueLocked(from *Client, locked bool) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if from == nil || !from.CanModerateQueue() {
-		return false
-	}
-	r.QueueLocked = locked
-	return true
-}
-
-func (r *Room) QueueLockedValue() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.QueueLocked
-}
-
 func (r *Room) resetSkipVotesLocked() {
 	r.SkipVotes = make(map[string]bool)
 	r.SkipVideoID = r.State.VideoID
@@ -160,7 +262,6 @@ func (r *Room) skipTallyLocked() (votes, needed int, hasVoted map[string]bool) {
 	return votes, needed, hasVoted
 }
 
-// VoteSkip records a viewer vote. Returns (votes, needed, passed, ok).
 func (r *Room) VoteSkip(from *Client) (votes, needed int, passed, ok bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -228,13 +329,13 @@ func (r *Room) renumberPlaylistLocked() {
 func (r *Room) BroadcastRoomMeta() {
 	r.mu.Lock()
 	votes, needed, _ := r.skipTallyLocked()
-	locked := r.QueueLocked
+	perms := r.Permissions
 	r.mu.Unlock()
 
 	raw, _ := json.Marshal(map[string]interface{}{
-		"queueLocked": locked,
 		"skipVotes":   votes,
 		"skipNeeded":  needed,
+		"permissions": perms,
 	})
 	r.deliver(WSMessage{
 		Action:  "ROOM_META",
@@ -270,13 +371,16 @@ func (r *Room) SendCorrectiveState(client *Client) {
 func (r *Room) roomMetaForClient(client *Client) map[string]interface{} {
 	votes, needed, voted := r.skipTallyLocked()
 	return map[string]interface{}{
-		"queueLocked":        r.QueueLocked,
 		"skipVotes":          votes,
 		"skipNeeded":         needed,
 		"hasSkipVoted":       voted[client.ID],
 		"isCohost":           client.IsCohost,
-		"canControlPlayback": client.CanControlPlayback(),
-		"canModerateQueue":   client.CanModerateQueue(),
+		"canControlPlayback": r.clientCanPlaybackLocked(client),
+		"canModerateQueue":   r.clientCanModQueueLocked(client),
+		"canAddQueue":        r.clientCanAddQueueLocked(client),
+		"canSubmitMoment":    r.clientCanSubmitMomentLocked(client),
+		"canJumpMoment":      r.clientCanJumpMomentLocked(client),
+		"permissions":        r.Permissions,
 		"role":               client.RoleName(),
 	}
 }

@@ -4,123 +4,152 @@ Welcome to the **TwinTube** project repository! This document provides technical
 
 ---
 
-## 🚀 Project Overview
+## Project Overview
 
-**TwinTube** is a lightweight, real-time synchronized video watching web application inspired by Google Material Design 3 and SyncTube. It allows users to create public/private rooms, embed YouTube videos, watch in synchronized playback with low-latency WebSockets, chat with timestamped messages and system alerts, queue videos collaboratively, and send fast GIF reactions over the player.
+**TwinTube** is a lightweight, real-time synchronized video watching web application inspired by Google Material Design 3 and SyncTube. Users create public/private rooms, watch YouTube / Vimeo / Twitch / direct / local media together with server-authoritative sync, chat with avatars, collaborate on a queue, save jumpable moments, send GIF reactions, and optionally use push-to-talk WebRTC voice.
+
+Rooms are **fully open by default**. Hosts can tighten permissions (playback, add/mod queue, moments, jump) via `SET_ROOM_PERMISSIONS`.
 
 ---
 
-## 🛠️ Technology Stack & Architecture
+## Technology Stack & Architecture
 
 ### Backend (Go)
 - **Language**: Go 1.21+
-- **HTTP & WebSockets**: `net/http` standard library + `github.com/gorilla/websocket`
-- **Database Engine**: PostgreSQL 16 (`github.com/lib/pq`) for production VPS hosting, with zero-config SQLite (`modernc.org/sqlite`) fallback.
-- **Authentication & Security**: `golang.org/x/crypto/bcrypt` for password hashing, `github.com/golang-jwt/jwt/v5` for stateless JWT tokens, security headers middleware (`nosniff`, `SAMEORIGIN`).
-- **State Management**: In-memory thread-safe room manager (`RoomManager`, `Room`) backed by database persistence.
+- **HTTP & WebSockets**: `net/http` + `github.com/gorilla/websocket`
+- **Database**: PostgreSQL 16 (`github.com/lib/pq`) for production, SQLite (`modernc.org/sqlite`) fallback
+- **Auth & Security**: bcrypt, JWT (`jwt/v5`), security headers + CSP (`internal/security`)
+- **State**: In-memory thread-safe `RoomManager` / `Room` with optional DB persistence
+- **Voice**: Optional STUN/TURN via `/api/rtc/config` + coturn compose profile
 
 ### Frontend
-- **Structure**: HTML5 Landing Page (`static/index.html`) & Watch Room (`static/room.html`)
-- **Styling**: Vanilla CSS3 (`static/css/style.css`) using CSS variables for Google Material 3 themes (Light/Dark mode)
-- **Logic**: Vanilla ES6+ JavaScript Modules (`landing.js`, `app.js`, `auth.js`, `player.js`, `ws.js`, `ui.js`)
-- **Video Player**: YouTube iFrame Player API (`YT.Player`) with `loadVideoById` for queue/sync video changes
+- **Pages**: Landing (`static/index.html`) & Watch Room (`static/room.html`)
+- **Styling**: Vanilla CSS3 Material 3 tokens; desktop + mobile-first room chrome (left drawer, bottom tabs ≤900px)
+- **Modules**: `landing.js`, `app.js`, `auth.js`, `player.js`, `ws.js`, `ui.js`, `i18n.js`, `localmedia.js`, `voice.js`
+- **i18n**: English + Portuguese (`static/js/i18n.js`)
+- **Players**: YouTube iFrame API, HTML5 video, generic iframe embeds
 
 ---
 
-## 📂 Repository Layout (Standard Go Package Organization)
+## Repository Layout
 
 ```
 twintube/
-├── main.go              # Root entry point (same server as cmd/server)
-├── go.mod               # Go module definition (lib/pq, jwt/v5, crypto)
-├── Dockerfile           # Multi-stage production container build for VPS
-├── docker-compose.yml   # Production Compose configuration for TwinTube + PostgreSQL 16
-├── .env.example         # Production environment configuration template
-├── cmd/
-│   └── server/
-│       └── main.go      # Application server entrypoint and HTTP routes
+├── main.go                 # Canonical server entrypoint (HTTP + WS)
+├── go.mod / go.sum
+├── Dockerfile
+├── docker-compose.yml      # App + PostgreSQL 16
+├── .env.example
+├── deploy/                 # Production Caddy/nginx + compose with optional coturn
 ├── internal/
-│   ├── auth/
-│   │   └── auth.go      # User Registration, Login, JWT generation/validation, password hashing
-│   ├── db/
-│   │   └── db.go        # PostgreSQL / SQLite dual driver setup & schema migrations
-│   ├── room/
-│   │   └── room.go      # Room engine, client management, server-authoritative sync
-│   └── utils/
-│       └── utils.go     # Helper utilities (ID generator, YouTube URL parser, oEmbed metadata)
+│   ├── api/                # REST: rooms, RTC config
+│   ├── auth/               # Register / login / profile / JWT
+│   ├── db/                 # Dual driver + migrations + chat/playlist persistence
+│   ├── room/               # Room engine, roles, moments, join access
+│   ├── security/           # Headers, CSP, Permissions-Policy
+│   ├── utils/              # IDs, URL/media extract, oEmbed
+│   └── version/
 └── static/
-    ├── logo.svg         # Transparent SVG brand logo
-    ├── favicon.svg      # SVG browser favicon
-    ├── gifs/            # Fast reaction WebP assets (happy, energetic, calm, stressed, tired)
-    ├── index.html       # SyncTube-inspired Landing Page layout
-    ├── room.html        # Single-page Watch Room layout
-    ├── css/
-    │   └── style.css    # Material Design 3 theme tokens & landing page styles
-    └── js/
-        ├── landing.js   # Landing page controller
-        ├── app.js       # Main room orchestrator
-        ├── auth.js      # Client authentication manager (Token storage, login/register API)
-        ├── player.js    # YouTube iFrame API player controller & drift sync engine (>1.5s)
-        ├── ws.js        # Low-latency WebSocket client with auto-reconnect
-        └── ui.js        # DOM rendering for chat, playlist queue, audience list, and toasts
+    ├── index.html / room.html
+    ├── bmc-button.png      # Landing page Buy Me a Coffee CTA
+    ├── bmc-logo.svg        # Room-header support icon
+    ├── gifs/               # Reaction WebPs
+    ├── css/style.css
+    └── js/                 # Frontend modules (incl. voice.js, localmedia.js)
 ```
+
+> Prefer root `main.go` as the source of truth. Ignore or delete stale `cmd/server` if it reappears.
 
 ---
 
-## 📡 WebSocket Protocol (Room Features)
+## WebSocket Protocol (Room Features)
 
 | Action | Direction | Purpose |
 |--------|-----------|---------|
-| `JOIN_ROOM` | C→S | Join with `{roomId, nickname, token?}` |
-| `INIT_STATE` | S→C | Full snapshot: video, playlist, users, host flags |
-| `CHAT_MESSAGE` | C↔S | User chat / system alerts (`isSystem`) |
-| `CHAT_HISTORY` | S→C | Last N messages (newest query, oldest→newest order) |
-| `ADD_QUEUE` | C→S | `{url}` → parse → append playlist |
-| `QUEUE_UPDATE` | S→C | Full playlist array |
-| `PLAY_QUEUE_ITEM` / `REMOVE_QUEUE_ITEM` | C→S | `{itemId}` |
-| `STATE_CHANGE` | C→S | Local play/pause → server authority |
-| `STATE_UPDATE` | S→C | Authoritative video state broadcast |
+| `JOIN_ROOM` | C→S | `{roomId, nickname, token?, joinToken?}` |
+| `INIT_STATE` | S→C | Snapshot: video, playlist, users, roles, permissions, moments |
+| `CHAT_MESSAGE` | C↔S | User chat (`avatarUrl`) / system alerts (`isSystem`) |
+| `CHAT_HISTORY` | S→C | Last N messages (oldest→newest) with avatars when known |
+| `ADD_QUEUE` | C→S | `{url, title?}` → parse → append |
+| `QUEUE_UPDATE` | S→C | Full playlist |
+| `PLAY_QUEUE_ITEM` / `REMOVE_QUEUE_ITEM` / `REORDER_QUEUE` | C→S | Queue control (gated by permissions) |
+| `STATE_CHANGE` | C→S | Local play/pause/seek → server authority |
+| `STATE_UPDATE` | S→C | Authoritative video state |
 | `SYNC_REQUEST` | C→S | Force personal resync |
-| `VIDEO_REACTION` | C↔S | Allowlisted GIF: `happy.webp`, `energetic.webp`, `calm.webp`, `stressed.webp`, `tired.webp` |
-| `USER_LIST` / `TRANSFER_HOST` | S→C / C→S | Audience + host handoff |
-| `ERROR` | S→C | Client-visible errors (e.g. bad queue URL) |
+| `VIDEO_REACTION` | C↔S | Allowlisted: `happy`, `energetic`, `stressed`, `tired`, `heart`, `lmao`, `popcorn`, `monkey-no-look` (`.webp`) |
+| `SET_ROOM_PERMISSIONS` | C→S | Host-only; open-by-default viewer flags |
+| `USER_LIST` / `TRANSFER_HOST` / `GRANT_COHOST` / `REVOKE_COHOST` | ↔ | Audience + roles |
+| `SUBMIT_MOMENT` / `APPROVE_MOMENT` / `REJECT_MOMENT` / `JUMP_TO_MOMENT` | ↔ | Timestamp moments |
+| `VOICE_JOIN` / `VOICE_LEAVE` / `VOICE_STATUS` | C→S | Push-to-talk presence |
+| `RTC_OFFER` / `RTC_ANSWER` / `RTC_ICE` | C→S→C | Targeted WebRTC signaling (`SendTo`) |
+| `LOCAL_FILE_STATUS` | C→S | Local Night readiness |
+| `ROOM_META` | S→C | Permissions / capability refresh |
+| `ERROR` | S→C | Client-visible errors |
+
+### Room permissions (defaults all `true`)
+- `anyonePlayback` — pause / play / `STATE_CHANGE`
+- `anyoneAddQueue` — add videos / local files
+- `anyoneModQueue` — remove / reorder
+- `anyoneMoment` — submit moments
+- `anyoneJump` — jump everyone to a moment  
+Host/co-host always bypass. Approve/reject moments remain controller-only.
 
 ---
 
-## 📐 Coding Conventions & Guidelines
+## Coding Conventions
 
 ### Backend (Go)
-1. **Standard Go Project Layout**: Keep business logic in `internal/` subpackages (`internal/auth`, `internal/db`, `internal/room`, `internal/utils`) and command runners in `cmd/server/main.go`.
-2. **Thread Safety**: All access to room state (`Room.State`, `Room.Clients`, `Room.Playlist`) must be guarded using `sync.RWMutex` (`RLock()` for reads, `Lock()` for state mutations). Prefer room helpers (`AppendPlaylistItem`, `PlayPlaylistItem`, `RemovePlaylistItem`, `SnapshotState`, `TransferHost`) over touching fields from HTTP/WS handlers.
-3. **No Broadcast Deadlocks**: Never send on `Room.Broadcast` from inside `Room.Run`'s `Register`/`Unregister` cases. Fan-out via `deliver()` (used by `BroadcastSystemAlert` / `BroadcastUserList`). The `Broadcast` channel is for external producers (WS handlers) only.
-4. **Database Integrity & Rebinding**: Use `Database.Rebind(query)` for all SQL parameters to automatically support `$1, $2` for PostgreSQL and `?` for SQLite.
-5. **Password Security**: Always hash passwords using `bcrypt` (cost 12). Never store plaintext passwords.
-6. **Go 1.21 loop variables**: When matching playlist items, copy by value (`target := item`) — never take `&item` from a `for _, item := range` loop.
+1. Business logic in `internal/`; root `main.go` is the server entrypoint.
+2. Guard room state with `sync.RWMutex`. Prefer helpers (`AppendPlaylistItem`, `SnapshotState`, `TransferHost`, `SetPermissions`, …).
+3. Never send on `Room.Broadcast` from inside `Room.Run` Register/Unregister — use `deliver()`.
+4. Use `Database.Rebind` for `$n` / `?` dual SQL.
+5. Hash passwords with bcrypt (cost 12).
+6. In range loops, copy by value — never `&item` from `for _, item := range`.
 
-### Sync Logic & Player Engine
-1. **Server-Authoritative Sync**: The backend holds the true video state (`videoId`, `status`, `currentTime`, `serverTimestamp`). The calculated current playback position is:
-   $$\text{CurrentPosition} = \text{CurrentTime} + \frac{\text{Now} - \text{ServerTimestamp}}{1000} \quad (\text{if status == "PLAYING"})$$
-2. **Drift Correction**: The client compares current player time with calculated server position. If drift is **> 1.5 seconds**, force a seek (`player.seekTo`).
-3. **Video ID Changes**: When `videoId` changes (queue play / join mid-room), call `loadVideoById({ videoId, startSeconds })`. Seek-only is not enough.
-4. **Pending State**: If `INIT_STATE` / `STATE_UPDATE` arrives before the YouTube iFrame API is ready, store it as `pendingServerState` and apply in `onReady`.
-5. **Remote Echo Guard**: While applying server state, set `isRemoteUpdate` long enough (≈1.2–2s) so local `onStateChange` does not echo a fighting `STATE_CHANGE`.
-6. **Auto-Advance**: When a video emits `ENDED` state, automatically pop and play the next video in the queue via `PLAY_QUEUE_ITEM`.
+### Sync / Player
+1. Server-authoritative position:  
+   `CurrentPosition = CurrentTime + (Now - ServerTimestamp)/1000` when `PLAYING`.
+2. Drift **> 1.5s** → force seek.
+3. `videoId` change → `loadVideoById` (seek-only is not enough).
+4. Buffer state as `pendingServerState` until the player is ready.
+5. Set `isRemoteUpdate` (~1.2–2s) to avoid echo fights.
+6. On `ENDED`, auto `PLAY_QUEUE_ITEM` for the next queue entry when allowed.
+
+### Voice
+- Mesh PTT, muted by default; Space / hold button to talk (max ~6 peers).
+- Deterministic offerer (`clientId` lexicographic) to avoid glare.
+- Queue ICE until remote description exists; resume remote `<audio>` on gesture.
+- Production NAT traversal needs coturn (`deploy` profile `voice`) + `TURN_*` env.
+
+### UI notes
+- Reactions: compact dock on the player (not the toolbar).
+- Moments: bookmarks button → panel on the video meta card (not inline in chat).
+- Mobile room (≤900px): header → left drawer; Chat/Queue/Viewers → bottom nav.
+- Avatars: render `avatarUrl` in chat + viewers; fall back to initials.
+- BMC: `bmc-button.png` on landing footer only; `bmc-logo.svg` in **room** header only.
 
 ---
 
-## 💻 Commands & VPS Deployment
+## Commands & Deployment
 
-### Running Locally
+### Local
 ```bash
 go run .
 # or
 go build -o twintube.exe .
 ./twintube.exe
 ```
-Then open `http://localhost:8080` (or the configured `PORT`).
+Open `http://localhost:8080`.
 
-### VPS Deployment via Docker Compose
+### Docker (app + Postgres)
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
+
+### Production voice (optional)
+```bash
+# set TURN_HOST / TURN_SECRET in .env, then:
+docker compose -f deploy/docker-compose.prod.yml --profile voice up -d
+```
+Open UDP/TCP **3478** and UDP **49152–49200** on the host firewall.

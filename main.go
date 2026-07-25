@@ -372,7 +372,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
-		if !c.CanControlPlayback() {
+		if !c.Room.ClientCanPlayback(c) {
 			c.Room.SendCorrectiveState(c)
 			sendError(c, "permission_denied")
 			return
@@ -422,6 +422,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		chatMsg := db.ChatMessage{
 			Type:      "chat",
 			Nickname:  c.Nickname,
+			AvatarURL: c.AvatarURL,
 			Content:   content,
 			IsSystem:  false,
 			Timestamp: time.Now().Format("15:04"),
@@ -442,7 +443,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 		if !c.Room.CanClientAddToQueue(c) {
-			sendError(c, "queue_locked")
+			sendError(c, "permission_denied")
 			return
 		}
 		var payload struct {
@@ -498,7 +499,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
-		if !c.CanControlPlayback() {
+		if !c.Room.ClientCanPlayback(c) {
 			sendError(c, "permission_denied")
 			return
 		}
@@ -536,7 +537,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
-		if !c.CanModerateQueue() {
+		if !c.Room.ClientCanModQueue(c) {
 			sendError(c, "permission_denied")
 			return
 		}
@@ -563,7 +564,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
-		if !c.CanModerateQueue() {
+		if !c.Room.ClientCanModQueue(c) {
 			sendError(c, "permission_denied")
 			return
 		}
@@ -589,53 +590,20 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Payload: raw,
 		}
 
-	case "SET_QUEUE_LOCK":
+	case "SET_ROOM_PERMISSIONS":
 		if c.Room == nil {
 			return
 		}
-		var payload struct {
-			Locked bool `json:"locked"`
-		}
+		var payload room.RoomPermissions
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return
 		}
-		if !c.Room.SetQueueLocked(c, payload.Locked) {
+		if !c.Room.SetPermissions(c, payload) {
 			sendError(c, "permission_denied")
 			return
 		}
-		if payload.Locked {
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s locked the queue.", c.Nickname))
-		} else {
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s unlocked the queue.", c.Nickname))
-		}
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s updated room permissions.", c.Nickname))
 		c.Room.BroadcastRoomMeta()
-
-	case "VOTE_SKIP":
-		if c.Room == nil {
-			return
-		}
-		votes, needed, passed, ok := c.Room.VoteSkip(c)
-		if !ok {
-			return
-		}
-		c.Room.BroadcastRoomMeta()
-		if passed {
-			c.Room.BroadcastSystemAlert("Skip vote passed.")
-			advanceQueueOrPause(c)
-		} else {
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("Skip vote: %d/%d", votes, needed))
-		}
-
-	case "SKIP_NOW":
-		if c.Room == nil {
-			return
-		}
-		if !c.CanControlPlayback() {
-			sendError(c, "permission_denied")
-			return
-		}
-		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s skipped the video.", c.Nickname))
-		advanceQueueOrPause(c)
 
 	case "TRANSFER_HOST":
 		if c.Room == nil || !c.IsHost {
@@ -762,7 +730,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
-		if !c.CanControlPlayback() {
+		if !c.Room.ClientCanJumpMoment(c) {
 			sendError(c, "permission_denied")
 			return
 		}
@@ -856,10 +824,14 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		allowed := map[string]bool{
-			"happy.webp":     true,
-			"energetic.webp": true,
-			"stressed.webp":  true,
-			"tired.webp":     true,
+			"happy.webp":           true,
+			"energetic.webp":       true,
+			"stressed.webp":        true,
+			"tired.webp":           true,
+			"heart.webp":           true,
+			"lmao.webp":            true,
+			"popcorn.webp":         true,
+			"monkey-no-look.webp":  true,
 		}
 		if !allowed[payload.Reaction] {
 			return
@@ -935,36 +907,6 @@ func sendError(c *room.Client, message string) {
 	case c.Send <- room.WSMessage{Action: "ERROR", Payload: raw}:
 	default:
 	}
-}
-
-func advanceQueueOrPause(c *room.Client) {
-	if c == nil || c.Room == nil {
-		return
-	}
-	targetItem, playlist, found := c.Room.PlayNextPlaylistItem()
-	if found {
-		if db.Database != nil && c.Room.IsPersistent() {
-			_ = db.Database.DeletePlaylistItem(targetItem.ID)
-			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
-		}
-		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title, room.MediaMeta{
-			Platform:  targetItem.Platform,
-			MediaKind: targetItem.MediaKind,
-			SourceURL: targetItem.SourceURL,
-			Seekable:  targetItem.Seekable,
-		})
-		raw, _ := json.Marshal(playlist)
-		c.Room.Broadcast <- room.WSMessage{Action: "QUEUE_UPDATE", Payload: raw}
-		return
-	}
-
-	state := c.Room.SnapshotState()
-	c.Room.UpdateVideoState(state.VideoID, "PAUSED", c.Room.GetCalculatedTime(), state.Title, room.MediaMeta{
-		Platform:  state.Platform,
-		MediaKind: state.MediaKind,
-		SourceURL: state.SourceURL,
-		Seekable:  state.Seekable,
-	})
 }
 
 func denyRoomJoin(c *room.Client, message string) {

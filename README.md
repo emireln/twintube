@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Real-Time Synchronized Video Watching Platform</b><br>
-  Inspired by SyncTube & Google Material Design 3 • Built with Go, WebSockets & PostgreSQL
+  Inspired by SyncTube &amp; Google Material Design 3 • Built with Go, WebSockets &amp; PostgreSQL
 </p>
 
 <p align="center">
@@ -20,130 +20,106 @@
 
 ---
 
-## 🌟 Features
+## Features
 
-- 🏠 **SyncTube-Style Landing Page**: Minimalist landing page with instant **Create Room** button, Log In / Sign Up actions, and creator support link.
-- ⚡ **Server-Authoritative Sync Engine**: Ultra-low latency playback synchronization over WebSockets with automatic drift correction (**>1.5s tolerance** auto-seek).
-- 📺 **YouTube iFrame API Integration**: Seamless playback control with auto-advance to the next video when current playback ends.
-- 📜 **Collaborative Queue**: Paste YouTube links or Video IDs. Automatically fetches video titles, author names, and thumbnails via oEmbed.
-- 💬 **Live Chat & System Alerts**: Real-time timestamped chat messages and automated system activity alerts (*"Alex paused the video"*).
-- 🔐 **User Auth & Guest Access**: Register/Login using **JWT** tokens and **bcrypt** password hashing, or **Join as Guest** without registration.
-- 🐘 **PostgreSQL & SQLite Dual Engine**: Native PostgreSQL connection for production VPS deployments, with zero-config SQLite fallback.
-- 🎨 **Google Material 3 Aesthetics**: Google Blue (`#1a73e8`), elevation shadows, responsive 70%/30% grid desktop layout, and light/dark theme toggle.
-- ☕ **Buy Me a Coffee Support**: Direct integrated link to support the creator at [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
-- 🐳 **Docker VPS Ready**: Includes multi-stage `Dockerfile` and `docker-compose.yml` orchestrating TwinTube + PostgreSQL 16.
+- **Watch together** — Server-authoritative sync over WebSockets with drift correction (&gt;1.5s auto-seek).
+- **Multi-source media** — YouTube, Vimeo, Twitch, direct links, and **Local Night** (files stay on each device; only fingerprints + playback sync).
+- **Collaborative queue** — Add, reorder, remove, and auto-advance; host can lock down who can edit.
+- **Open-by-default rooms** — Hosts/co-hosts control permissions for playback, queue, moments, and jumps.
+- **Moments** — Save timestamps, approve as host/co-host, jump everyone to a highlight.
+- **Live chat** — Timestamped messages, system alerts, and profile avatars.
+- **Fast GIF reactions** — Compact player dock with allowlisted WebP reactions.
+- **Push-to-talk voice** — Optional WebRTC mesh (STUN + optional self-hosted coturn).
+- **Auth & guests** — JWT + bcrypt accounts, or join as guest; EN/PT UI.
+- **Mobile room UX** — Slim top bar, left drawer for room tools, bottom tabs for Chat / Queue / Viewers.
+- **Buy Me a Coffee** — Landing footer button + room-header logo link to [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
+- **Docker ready** — Multi-stage image, Compose with PostgreSQL 16, production deploy helpers under `deploy/`.
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 | Layer | Technology |
 | :--- | :--- |
-| **Backend** | Go (Golang) 1.21+, Standard `net/http` |
-| **Real-Time Engine** | WebSockets (`github.com/gorilla/websocket`) |
-| **Database** | PostgreSQL (`github.com/lib/pq`) / SQLite (`modernc.org/sqlite`) |
-| **Authentication** | JWT (`github.com/golang-jwt/jwt/v5`) & Bcrypt (`golang.org/x/crypto`) |
-| **Frontend** | Pure HTML5, Vanilla CSS3 (CSS Variables), Vanilla ES6 Modules |
-| **Containerization**| Docker & Docker Compose |
+| **Backend** | Go 1.21+, standard `net/http` |
+| **Real-time** | WebSockets (`gorilla/websocket`) |
+| **Database** | PostgreSQL (`lib/pq`) / SQLite (`modernc.org/sqlite`) |
+| **Auth** | JWT + bcrypt |
+| **Frontend** | HTML5, CSS3 (Material 3 tokens), ES6 modules |
+| **Voice** | Browser WebRTC + optional coturn |
+| **Containers** | Docker / Docker Compose |
 
 ---
 
-## 📂 Repository Structure (Standard Go Package Layout)
+## Repository Structure
 
 ```
 twintube/
-├── main.go              # Root entry point delegating server execution
-├── go.mod               # Go module definition
-├── Dockerfile           # Multi-stage production container build
-├── docker-compose.yml   # Production Compose configuration for TwinTube + PostgreSQL 16
-├── .env.example         # Production environment configuration template
-├── cmd/
-│   └── server/
-│       └── main.go      # Application server entrypoint and HTTP routes
+├── main.go                 # Server entrypoint
+├── Dockerfile
+├── docker-compose.yml      # App + PostgreSQL
+├── .env.example
+├── deploy/                 # Production compose, Caddy/nginx, coturn profile
 ├── internal/
-│   ├── auth/
-│   │   └── auth.go      # User Registration, Login, JWT generation/validation
-│   ├── db/
-│   │   └── db.go        # PostgreSQL / SQLite dual driver setup & schema migrations
-│   ├── room/
-│   │   └── room.go      # Room engine & server-authoritative sync logic
-│   └── utils/
-│       └── utils.go     # Helper utilities (oEmbed metadata, ID generation)
+│   ├── api/                # Rooms API, /api/rtc/config
+│   ├── auth/               # Auth & profile
+│   ├── db/                 # Dual DB + persistence
+│   ├── room/               # Sync engine, roles, moments, join access
+│   ├── security/           # Security headers & CSP
+│   └── utils/              # Media URL helpers
 └── static/
-    ├── logo.svg         # Transparent Google Material 3 app logo
-    ├── favicon.svg      # SVG browser favicon
-    ├── index.html       # SyncTube-style Landing Page layout
-    ├── room.html        # Watch Room layout
-    ├── css/
-    │   └── style.css    # Material Design 3 theme tokens & landing styles
-    └── js/
-        ├── landing.js   # Landing page controller
-        ├── app.js       # Main watch room orchestrator
-        ├── auth.js      # Client authentication manager
-        ├── player.js    # YouTube iFrame API player controller & drift sync engine
-        ├── ws.js        # Low-latency WebSocket client with auto-reconnect
-        └── ui.js        # DOM rendering for chat, playlist queue, audience list, and toasts
+    ├── index.html          # Landing
+    ├── room.html           # Watch room
+    ├── bmc-button.png / bmc-logo.svg
+    ├── gifs/               # Reaction assets
+    ├── css/style.css
+    └── js/                 # app, player, ws, ui, voice, localmedia, i18n, …
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. Running Locally (Development Mode)
+### Local development
 
-Prerequisites: Go 1.21+ installed on your system.
+Prerequisites: Go 1.21+.
 
 ```bash
-# Clone repository
 git clone https://github.com/emireln/twintube.git
 cd twintube
-
-# Run application
 go run .
 ```
 
-Open your browser at `http://localhost:8080`.
+Open [http://localhost:8080](http://localhost:8080).
+
+### Docker Compose (production-style)
+
+```bash
+git clone https://github.com/emireln/twintube.git
+cd twintube
+cp .env.example .env
+# Set JWT_SECRET (and DB credentials if needed)
+docker compose up -d --build
+```
+
+TwinTube listens on port `8080` with PostgreSQL 16.
+
+### Optional voice (TURN)
+
+Set `TURN_HOST` / `TURN_SECRET` in `.env`, open UDP/TCP **3478** and UDP **49152–49200**, then use the production compose **voice** profile (see `deploy/docker-compose.prod.yml` and `AGENTS.md`).
 
 ---
 
-### 2. VPS Deployment via Docker Compose (Production Mode)
+## Support the Creator
 
-1. Clone repository to your VPS:
-   ```bash
-   git clone https://github.com/emireln/twintube.git
-   cd twintube
-   ```
-
-2. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Configure your secret key in `.env`:
-   ```env
-   PORT=8080
-   DB_TYPE=postgres
-   DATABASE_URL=postgres://twintube_user:twintube_secure_password@postgres:5432/twintube_db?sslmode=disable
-   JWT_SECRET=your_super_secret_vps_jwt_signing_key_here
-   ```
-
-4. Start Docker Compose:
-   ```bash
-   docker compose up -d --build
-   ```
-
-TwinTube will be running live on port `8080` backed by a dedicated PostgreSQL 16 container!
-
----
-
-## ☕ Support the Creator
-
-If you enjoy using TwinTube, consider supporting the project:
+If you enjoy TwinTube:
 
 [<img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee">](https://buymeacoffee.com/emireln)
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See the [LICENSE](LICENSE) file for details.
+GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE).
+
+For contributor / AI-agent conventions, see [AGENTS.md](AGENTS.md).

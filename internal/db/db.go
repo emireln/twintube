@@ -32,6 +32,7 @@ type User struct {
 type ChatMessage struct {
 	Type      string `json:"type"`
 	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatarUrl,omitempty"`
 	Content   string `json:"content"`
 	IsSystem  bool   `json:"isSystem"`
 	Timestamp string `json:"timestamp"`
@@ -488,7 +489,13 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	query := d.Rebind(`SELECT nickname, content, is_system, created_at FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?;`)
+	query := d.Rebind(`
+		SELECT m.nickname, COALESCE(u.avatar_url, ''), m.content, m.is_system, m.created_at
+		FROM messages m
+		LEFT JOIN users u ON u.id = m.user_id
+		WHERE m.room_id = ?
+		ORDER BY m.id DESC
+		LIMIT ?;`)
 	rows, err := d.db.Query(query, roomID, limit)
 	if err != nil {
 		return nil, err
@@ -501,7 +508,7 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 		var isSys bool
 		var createdAt time.Time
 
-		if err := rows.Scan(&msg.Nickname, &msg.Content, &isSys, &createdAt); err != nil {
+		if err := rows.Scan(&msg.Nickname, &msg.AvatarURL, &msg.Content, &isSys, &createdAt); err != nil {
 			continue
 		}
 
