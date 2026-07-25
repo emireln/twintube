@@ -10,7 +10,14 @@ if [[ ! -f "$VERSION_FILE" ]]; then
 fi
 
 CURRENT="$(tr -d '[:space:]' < "$VERSION_FILE")"
-IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT}.0.0"
+MAJOR="$(echo "$CURRENT" | cut -d. -f1)"
+MINOR="$(echo "$CURRENT" | cut -d. -f2)"
+PATCH="$(echo "$CURRENT" | cut -d. -f3)"
+
+MAJOR="${MAJOR:-1}"
+MINOR="${MINOR:-0}"
+PATCH="${PATCH:-0}"
+
 PATCH=$((PATCH + 1))
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
