@@ -371,6 +371,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
+		if !c.CanControlPlayback() {
+			c.Room.SendCorrectiveState(c)
+			sendError(c, "permission_denied")
+			return
+		}
 		var payload struct {
 			VideoID     string  `json:"videoId"`
 			Title       string  `json:"title"`
@@ -435,6 +440,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
+		if !c.Room.CanClientAddToQueue(c) {
+			sendError(c, "queue_locked")
+			return
+		}
 		var payload struct {
 			URL   string `json:"url"`
 			Title string `json:"title"`
@@ -488,6 +497,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
+		if !c.CanControlPlayback() {
+			sendError(c, "permission_denied")
+			return
+		}
 		var payload struct {
 			ItemID string `json:"itemId"`
 		}
@@ -502,6 +515,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 
 		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(targetItem.ID)
+			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
 		}
 		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title, room.MediaMeta{
 			Platform:  targetItem.Platform,
@@ -521,6 +535,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if c.Room == nil {
 			return
 		}
+		if !c.CanModerateQueue() {
+			sendError(c, "permission_denied")
+			return
+		}
 		var payload struct {
 			ItemID string `json:"itemId"`
 		}
@@ -531,6 +549,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		removed, playlist := c.Room.RemovePlaylistItem(payload.ItemID)
 		if removed && db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.DeletePlaylistItem(payload.ItemID)
+			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
 		}
 
 		raw, _ := json.Marshal(playlist)
@@ -539,8 +558,87 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Payload: raw,
 		}
 
+	case "REORDER_QUEUE":
+		if c.Room == nil {
+			return
+		}
+		if !c.CanModerateQueue() {
+			sendError(c, "permission_denied")
+			return
+		}
+		var payload struct {
+			Order []string `json:"order"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		playlist, ok := c.Room.ReorderPlaylist(payload.Order)
+		if !ok {
+			sendError(c, "invalid_queue_order")
+			raw, _ := json.Marshal(playlist)
+			c.Room.Broadcast <- room.WSMessage{Action: "QUEUE_UPDATE", Payload: raw}
+			return
+		}
+		if db.Database != nil && c.Room.IsPersistent() {
+			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
+		}
+		raw, _ := json.Marshal(playlist)
+		c.Room.Broadcast <- room.WSMessage{
+			Action:  "QUEUE_UPDATE",
+			Payload: raw,
+		}
+
+	case "SET_QUEUE_LOCK":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			Locked bool `json:"locked"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		if !c.Room.SetQueueLocked(c, payload.Locked) {
+			sendError(c, "permission_denied")
+			return
+		}
+		if payload.Locked {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s locked the queue.", c.Nickname))
+		} else {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s unlocked the queue.", c.Nickname))
+		}
+		c.Room.BroadcastRoomMeta()
+
+	case "VOTE_SKIP":
+		if c.Room == nil {
+			return
+		}
+		votes, needed, passed, ok := c.Room.VoteSkip(c)
+		if !ok {
+			return
+		}
+		c.Room.BroadcastRoomMeta()
+		if passed {
+			c.Room.BroadcastSystemAlert("Skip vote passed.")
+			advanceQueueOrPause(c)
+		} else {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("Skip vote: %d/%d", votes, needed))
+		}
+
+	case "SKIP_NOW":
+		if c.Room == nil {
+			return
+		}
+		if !c.CanControlPlayback() {
+			sendError(c, "permission_denied")
+			return
+		}
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s skipped the video.", c.Nickname))
+		advanceQueueOrPause(c)
+
 	case "TRANSFER_HOST":
 		if c.Room == nil || !c.IsHost {
+			sendError(c, "permission_denied")
 			return
 		}
 		var payload struct {
@@ -555,6 +653,43 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		c.Room.BroadcastUserList()
+		c.Room.BroadcastRoomMeta()
+
+	case "GRANT_COHOST":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			TargetClientID string `json:"targetId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		if nick, ok := c.Room.GrantCohost(c, payload.TargetClientID); ok {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s made %s a co-host.", c.Nickname, nick))
+			c.Room.BroadcastUserList()
+			c.Room.BroadcastRoomMeta()
+		} else {
+			sendError(c, "permission_denied")
+		}
+
+	case "REVOKE_COHOST":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			TargetClientID string `json:"targetId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		if nick, ok := c.Room.RevokeCohost(c, payload.TargetClientID); ok {
+			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s removed co-host from %s.", c.Nickname, nick))
+			c.Room.BroadcastUserList()
+			c.Room.BroadcastRoomMeta()
+		} else {
+			sendError(c, "permission_denied")
+		}
 
 	case "VIDEO_REACTION":
 		if c.Room == nil {
@@ -637,6 +772,36 @@ func sendError(c *room.Client, message string) {
 	case c.Send <- room.WSMessage{Action: "ERROR", Payload: raw}:
 	default:
 	}
+}
+
+func advanceQueueOrPause(c *room.Client) {
+	if c == nil || c.Room == nil {
+		return
+	}
+	targetItem, playlist, found := c.Room.PlayNextPlaylistItem()
+	if found {
+		if db.Database != nil && c.Room.IsPersistent() {
+			_ = db.Database.DeletePlaylistItem(targetItem.ID)
+			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
+		}
+		c.Room.UpdateVideoState(targetItem.VideoID, "PLAYING", 0.0, targetItem.Title, room.MediaMeta{
+			Platform:  targetItem.Platform,
+			MediaKind: targetItem.MediaKind,
+			SourceURL: targetItem.SourceURL,
+			Seekable:  targetItem.Seekable,
+		})
+		raw, _ := json.Marshal(playlist)
+		c.Room.Broadcast <- room.WSMessage{Action: "QUEUE_UPDATE", Payload: raw}
+		return
+	}
+
+	state := c.Room.SnapshotState()
+	c.Room.UpdateVideoState(state.VideoID, "PAUSED", c.Room.GetCalculatedTime(), state.Title, room.MediaMeta{
+		Platform:  state.Platform,
+		MediaKind: state.MediaKind,
+		SourceURL: state.SourceURL,
+		Seekable:  state.Seekable,
+	})
 }
 
 func denyRoomJoin(c *room.Client, message string) {

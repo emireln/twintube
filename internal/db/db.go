@@ -549,6 +549,29 @@ func (d *DB) DeletePlaylistItem(itemID string) error {
 	return err
 }
 
+func (d *DB) ReplacePlaylistPositions(roomID string, items []PlaylistItem) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if !d.roomIsOwnedLocked(roomID) {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	query := d.Rebind(`UPDATE playlist_items SET position = ? WHERE id = ? AND room_id = ?;`)
+	for _, item := range items {
+		if _, err := tx.Exec(query, item.Position, item.ID, roomID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 type RoomRecord struct {
 	ID             string     `db:"id"`
 	Name           string     `db:"name"`

@@ -580,10 +580,16 @@ export class UIManager {
   }
 
   // Playlist Queue Rendering
-  renderQueue(playlist, isHost, onPlayItem, onRemoveItem) {
+  renderQueue(playlist, options = {}) {
     const container = document.getElementById('queueList');
     const counter = document.getElementById('queueCounter');
     if (!container) return;
+
+    const canControl = !!options.canControlPlayback;
+    const canModerate = !!options.canModerateQueue;
+    const onPlayItem = options.onPlayItem || (() => {});
+    const onRemoveItem = options.onRemoveItem || (() => {});
+    const onReorder = options.onReorder || null;
 
     if (counter) counter.textContent = playlist.length;
     container.innerHTML = '';
@@ -597,39 +603,78 @@ export class UIManager {
       return;
     }
 
-    playlist.forEach((item) => {
+    playlist.forEach((item, index) => {
       const el = document.createElement('div');
       el.className = 'queue-item';
+      el.dataset.itemId = item.id;
+      if (canModerate) el.draggable = true;
+
+      const actions = [];
+      if (canControl) {
+        actions.push(`<button class="nav-icon-btn btn-play" title="${t('play_video')}" style="width:30px; height:30px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>`);
+      }
+      if (canModerate) {
+        actions.push(`<button class="nav-icon-btn btn-remove" title="${t('remove_from_queue')}" style="width:30px; height:30px;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>`);
+      }
+
       el.innerHTML = `
+        ${canModerate ? `<span class="queue-drag" title="${t('reorder_queue')}" aria-hidden="true">⋮⋮</span>` : ''}
         <img class="queue-thumb" src="${queueThumbUrl(item)}" alt="Thumb">
         <div class="queue-details">
           <div class="queue-title">${this.escapeHTML(item.title)}</div>
           <div class="queue-meta">${t('queue_added_by')} ${this.escapeHTML(item.addedBy)}</div>
         </div>
-        <div class="queue-actions">
-          <button class="nav-icon-btn btn-play" title="${t('play_video')}" style="width:30px; height:30px;">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
-          <button class="nav-icon-btn btn-remove" title="${t('remove_from_queue')}" style="width:30px; height:30px;">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
+        <div class="queue-actions">${actions.join('')}</div>
       `;
 
-      el.querySelector('.btn-play').addEventListener('click', () => onPlayItem(item.id));
-      el.querySelector('.btn-remove').addEventListener('click', () => onRemoveItem(item.id));
+      const playBtn = el.querySelector('.btn-play');
+      if (playBtn) playBtn.addEventListener('click', () => onPlayItem(item.id));
+      const removeBtn = el.querySelector('.btn-remove');
+      if (removeBtn) removeBtn.addEventListener('click', () => onRemoveItem(item.id));
+
+      if (canModerate && onReorder) {
+        el.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', String(index));
+          el.classList.add('is-dragging');
+        });
+        el.addEventListener('dragend', () => el.classList.remove('is-dragging'));
+        el.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          el.classList.add('drag-over');
+        });
+        el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          el.classList.remove('drag-over');
+          const from = Number(e.dataTransfer.getData('text/plain'));
+          const to = index;
+          if (Number.isNaN(from) || from === to) return;
+          const next = playlist.slice();
+          const [moved] = next.splice(from, 1);
+          next.splice(to, 0, moved);
+          onReorder(next.map((q) => q.id));
+        });
+      }
 
       container.appendChild(el);
     });
   }
 
   // Audience Viewers Rendering
-  renderViewers(users, currentClientID, isHost, onTransferHost, options = {}) {
+  renderViewers(users, currentClientID, options = {}) {
     const container = document.getElementById('viewersList');
     const counter = document.getElementById('viewersCounter');
     const banner = document.getElementById('localReadyBanner');
     if (!container) return;
 
+    const isHost = !!options.isHost;
+    const onTransferHost = options.onTransferHost || (() => {});
+    const onGrantCohost = options.onGrantCohost || (() => {});
+    const onRevokeCohost = options.onRevokeCohost || (() => {});
     const localVideoActive = !!options.localVideoActive;
     const readyCount = options.readyCount || 0;
     const totalCount = options.totalCount || users.length;
@@ -661,6 +706,16 @@ export class UIManager {
           : `<span class="badge badge-file-missing" title="${t('local_missing_title')}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ${t('local_missing_badge')}</span>`;
       }
 
+      let roleActions = '';
+      if (isHost && !user.isHost && !isYou) {
+        roleActions += `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">${t('make_host')}</button>`;
+        if (user.isCohost) {
+          roleActions += `<button class="btn btn-secondary btn-revoke-cohost" style="font-size: 11px; padding: 4px 10px;">${t('remove_cohost')}</button>`;
+        } else {
+          roleActions += `<button class="btn btn-secondary btn-grant-cohost" style="font-size: 11px; padding: 4px 10px;">${t('make_cohost')}</button>`;
+        }
+      }
+
       el.innerHTML = `
         <div class="viewer-info">
           <div class="msg-avatar">${initial}</div>
@@ -669,18 +724,21 @@ export class UIManager {
             ${isYou ? `<span style="font-size: 11px; opacity: 0.7;"> ${t('viewer_you')}</span>` : ''}
           </div>
         </div>
-        <div style="display: flex; gap: 6px; align-items: center;">
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
           ${localBadge}
           ${user.isGuest ? `<span class="badge badge-guest" style="font-size: 10px; padding: 2px 6px;">${t('guest_badge')}</span>` : ''}
           ${user.isHost ? `<span class="badge badge-host"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg> ${t('host_badge')}</span>` : ''}
-          ${isHost && !user.isHost ? `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">${t('make_host')}</button>` : ''}
+          ${user.isCohost && !user.isHost ? `<span class="badge badge-cohost">${t('cohost_badge')}</span>` : ''}
+          ${roleActions}
         </div>
       `;
 
       const btnTransfer = el.querySelector('.btn-transfer');
-      if (btnTransfer) {
-        btnTransfer.addEventListener('click', () => onTransferHost(user.id));
-      }
+      if (btnTransfer) btnTransfer.addEventListener('click', () => onTransferHost(user.id));
+      const btnGrant = el.querySelector('.btn-grant-cohost');
+      if (btnGrant) btnGrant.addEventListener('click', () => onGrantCohost(user.id));
+      const btnRevoke = el.querySelector('.btn-revoke-cohost');
+      if (btnRevoke) btnRevoke.addEventListener('click', () => onRevokeCohost(user.id));
 
       container.appendChild(el);
     });

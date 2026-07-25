@@ -28,9 +28,11 @@ type UserSummary struct {
 	UserID         string `json:"userId,omitempty"`
 	Nickname       string `json:"nickname"`
 	IsHost         bool   `json:"isHost"`
+	IsCohost       bool   `json:"isCohost"`
 	IsGuest        bool   `json:"isGuest"`
 	AvatarURL      string `json:"avatarUrl,omitempty"`
 	LocalFileReady bool   `json:"localFileReady"`
+	Role           string `json:"role"`
 }
 
 type WSMessage struct {
@@ -45,9 +47,11 @@ type Client struct {
 	RoomID    string
 	Nickname  string
 	IsHost    bool
+	IsCohost  bool
 	IsGuest   bool
 	AvatarURL string
 	RemoteIP  string
+	JoinedAt  time.Time
 	Conn      *websocket.Conn
 	Send      chan WSMessage
 	Room      *Room
@@ -58,20 +62,24 @@ type Client struct {
 }
 
 type Room struct {
-	ID           string
-	Name         string
-	IsPrivate    bool
-	OwnerID      string
-	PasswordHash string
-	ExpiresAt    *time.Time
-	HostID       string
-	State        VideoState
-	Clients      map[string]*Client
-	Playlist     []db.PlaylistItem
-	Register     chan *Client
-	Unregister   chan *Client
-	Broadcast    chan WSMessage
-	mu           sync.RWMutex
+	ID            string
+	Name          string
+	IsPrivate     bool
+	OwnerID       string
+	PasswordHash  string
+	ExpiresAt     *time.Time
+	HostID        string
+	State         VideoState
+	Clients       map[string]*Client
+	Playlist      []db.PlaylistItem
+	QueueLocked   bool
+	SkipVotes     map[string]bool
+	SkipVideoID   string
+	CohostUserIDs map[string]bool
+	Register      chan *Client
+	Unregister    chan *Client
+	Broadcast     chan WSMessage
+	mu            sync.RWMutex
 }
 
 func (rm *RoomManager) RemoveRoom(roomID string) {
@@ -143,11 +151,13 @@ func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 			MediaKind:       "vod",
 			Seekable:        true,
 		},
-		Clients:    make(map[string]*Client),
-		Playlist:   make([]db.PlaylistItem, 0),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		Broadcast:  make(chan WSMessage, 64),
+		Clients:       make(map[string]*Client),
+		Playlist:      make([]db.PlaylistItem, 0),
+		SkipVotes:     make(map[string]bool),
+		CohostUserIDs: make(map[string]bool),
+		Register:      make(chan *Client),
+		Unregister:    make(chan *Client),
+		Broadcast:     make(chan WSMessage, 64),
 	}
 }
 
@@ -265,15 +275,20 @@ func (r *Room) Run() {
 		select {
 		case client := <-r.Register:
 			r.mu.Lock()
+			if client.JoinedAt.IsZero() {
+				client.JoinedAt = time.Now()
+			}
 			r.Clients[client.ID] = client
+			r.restoreCohostOnJoinLocked(client)
 
 			if r.HostID == "" {
 				r.HostID = client.ID
 				client.IsHost = true
+				client.IsCohost = false
 			}
 			r.mu.Unlock()
 
-			log.Printf("[ROOM %s] Client joined: %s (Guest: %v, Host: %v)", r.ID, client.Nickname, client.IsGuest, client.IsHost)
+			log.Printf("[ROOM %s] Client joined: %s (Guest: %v, Host: %v, Cohost: %v)", r.ID, client.Nickname, client.IsGuest, client.IsHost, client.IsCohost)
 
 			userType := ""
 			if client.IsGuest {
@@ -282,6 +297,7 @@ func (r *Room) Run() {
 			// deliver() directly — never send on Broadcast from inside Run (deadlock)
 			r.BroadcastSystemAlert(client.Nickname + userType + " joined the room.")
 			r.BroadcastUserList()
+			r.BroadcastRoomMeta()
 			r.SendInitState(client)
 
 		case client := <-r.Unregister:
@@ -294,16 +310,19 @@ func (r *Room) Run() {
 				delete(r.Clients, client.ID)
 				close(client.Send)
 				leftNickname = client.Nickname
+				if r.SkipVotes != nil {
+					delete(r.SkipVotes, client.ID)
+				}
 
 				log.Printf("[ROOM %s] Client left: %s", r.ID, client.Nickname)
 
 				if client.ID == r.HostID {
 					r.HostID = ""
-					for _, c := range r.Clients {
-						r.HostID = c.ID
-						c.IsHost = true
-						newHostAlert = c.Nickname + " is now the Host."
-						break
+					if next := r.promoteNewHostLocked(); next != nil {
+						r.HostID = next.ID
+						next.IsHost = true
+						next.IsCohost = false
+						newHostAlert = next.Nickname + " is now the Host."
 					}
 				}
 
@@ -319,6 +338,7 @@ func (r *Room) Run() {
 				}
 				r.BroadcastSystemAlert(leftNickname + " left the room.")
 				r.BroadcastUserList()
+				r.BroadcastRoomMeta()
 			}
 
 			if destroyEphemeral {
@@ -376,8 +396,8 @@ func (r *Room) SnapshotState() VideoState {
 }
 
 func (r *Room) SendInitState(client *Client) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	calculatedTime := r.State.CurrentTime
 	nowMs := time.Now().UnixNano() / 1e6
@@ -388,12 +408,22 @@ func (r *Room) SendInitState(client *Client) {
 	playlist := make([]db.PlaylistItem, len(r.Playlist))
 	copy(playlist, r.Playlist)
 
+	meta := r.roomMetaForClient(client)
+
 	statePayload := map[string]interface{}{
 		"roomId":   r.ID,
 		"clientId": client.ID,
 		"isHost":   client.IsHost,
+		"isCohost": client.IsCohost,
 		"isGuest":  client.IsGuest,
 		"hostId":   r.HostID,
+		"role":     client.RoleName(),
+		"canControlPlayback": client.CanControlPlayback(),
+		"canModerateQueue":   client.CanModerateQueue(),
+		"queueLocked":        r.QueueLocked,
+		"skipVotes":          meta["skipVotes"],
+		"skipNeeded":         meta["skipNeeded"],
+		"hasSkipVoted":       meta["hasSkipVoted"],
 		"video": map[string]interface{}{
 			"videoId":         r.State.VideoID,
 			"title":           r.State.Title,
@@ -454,9 +484,11 @@ func (r *Room) getUserListUnsafe() []UserSummary {
 			UserID:         c.UserID,
 			Nickname:       c.Nickname,
 			IsHost:         c.IsHost,
+			IsCohost:       c.IsCohost,
 			IsGuest:        c.IsGuest,
 			AvatarURL:      c.AvatarURL,
 			LocalFileReady: c.LocalReadyID != "" && c.LocalReadyID == r.State.VideoID,
+			Role:           c.RoleName(),
 		})
 	}
 	return list
@@ -547,6 +579,7 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 	}
 
 	stateCopy := r.State
+	r.resetSkipVotesLocked()
 
 	if db.Database != nil && r.OwnerID != "" {
 		_ = db.Database.SaveRoom(r.ID, r.HostID, r.State.VideoID, r.State.Status, r.State.CurrentTime)
@@ -571,6 +604,7 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 		Payload:   raw,
 		Timestamp: nowMs,
 	}
+	r.BroadcastRoomMeta()
 }
 
 func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem) {
@@ -583,6 +617,18 @@ func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.P
 	out := make([]db.PlaylistItem, len(r.Playlist))
 	copy(out, r.Playlist)
 	return item, out
+}
+
+func (r *Room) PlayNextPlaylistItem() (db.PlaylistItem, []db.PlaylistItem, bool) {
+	r.mu.RLock()
+	if len(r.Playlist) == 0 {
+		r.mu.RUnlock()
+		out := make([]db.PlaylistItem, 0)
+		return db.PlaylistItem{}, out, false
+	}
+	nextID := r.Playlist[0].ID
+	r.mu.RUnlock()
+	return r.PlayPlaylistItem(nextID)
 }
 
 func (r *Room) PlayPlaylistItem(itemID string) (db.PlaylistItem, []db.PlaylistItem, bool) {
@@ -609,6 +655,7 @@ func (r *Room) PlayPlaylistItem(itemID string) (db.PlaylistItem, []db.PlaylistIt
 	}
 
 	r.Playlist = newPlaylist
+	r.renumberPlaylistLocked()
 	out := make([]db.PlaylistItem, len(r.Playlist))
 	copy(out, r.Playlist)
 	return target, out, true
@@ -627,6 +674,7 @@ func (r *Room) RemovePlaylistItem(itemID string) (removed bool, playlist []db.Pl
 		newPlaylist = append(newPlaylist, item)
 	}
 	r.Playlist = newPlaylist
+	r.renumberPlaylistLocked()
 
 	playlist = make([]db.PlaylistItem, len(r.Playlist))
 	copy(playlist, r.Playlist)
@@ -649,5 +697,9 @@ func (r *Room) TransferHost(from *Client, targetClientID string) (targetNickname
 	from.IsHost = false
 	r.HostID = target.ID
 	target.IsHost = true
+	target.IsCohost = false
+	if target.UserID != "" && r.CohostUserIDs != nil {
+		delete(r.CohostUserIDs, target.UserID)
+	}
 	return target.Nickname, true
 }

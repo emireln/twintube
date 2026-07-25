@@ -20,6 +20,13 @@ class TwinTubeApp {
     this.nickname = localStorage.getItem('twintube_nickname') || '';
     this.currentClientID = '';
     this.isHost = false;
+    this.isCohost = false;
+    this.canControlPlayback = false;
+    this.canModerateQueue = false;
+    this.queueLocked = false;
+    this.skipVotes = 0;
+    this.skipNeeded = 1;
+    this.hasSkipVoted = false;
     this.hasJoined = false;
     this.accessGranted = false;
     this.playlist = [];
@@ -256,6 +263,25 @@ class TwinTubeApp {
         this.forceNextSync = true;
         this.ws.sendAction('SYNC_REQUEST');
         this.ui.showToast(t('resyncing'));
+      });
+    }
+
+    const btnVoteSkip = document.getElementById('btnVoteSkip');
+    if (btnVoteSkip) {
+      btnVoteSkip.addEventListener('click', () => {
+        this.hasSkipVoted = true;
+        btnVoteSkip.disabled = true;
+        this.ws.sendAction('VOTE_SKIP');
+      });
+    }
+    const btnSkipNow = document.getElementById('btnSkipNow');
+    if (btnSkipNow) {
+      btnSkipNow.addEventListener('click', () => this.ws.sendAction('SKIP_NOW'));
+    }
+    const btnQueueLock = document.getElementById('btnQueueLock');
+    if (btnQueueLock) {
+      btnQueueLock.addEventListener('click', () => {
+        this.ws.sendAction('SET_QUEUE_LOCK', { locked: !this.queueLocked });
       });
     }
 
@@ -511,6 +537,7 @@ class TwinTubeApp {
         });
       },
       () => {
+        if (!this.canControlPlayback) return;
         if (this.playlist && this.playlist.length > 0) {
           const nextItem = this.playlist[0];
           this.ws.sendAction('PLAY_QUEUE_ITEM', { itemId: nextItem.id });
@@ -626,16 +653,69 @@ class TwinTubeApp {
     this.ui.renderViewers(
       this.lastUsers,
       this.currentClientID,
-      this.isHost,
-      (targetId) => {
-        this.ws.sendAction('TRANSFER_HOST', { targetId });
-      },
       {
+        isHost: this.isHost,
+        onTransferHost: (targetId) => this.ws.sendAction('TRANSFER_HOST', { targetId }),
+        onGrantCohost: (targetId) => this.ws.sendAction('GRANT_COHOST', { targetId }),
+        onRevokeCohost: (targetId) => this.ws.sendAction('REVOKE_COHOST', { targetId }),
         localVideoActive: localActive,
         readyCount,
         totalCount: this.lastUsers.length
       }
     );
+  }
+
+  applyRoleState(payload = {}) {
+    if (typeof payload.isHost === 'boolean') this.isHost = payload.isHost;
+    if (typeof payload.isCohost === 'boolean') this.isCohost = payload.isCohost;
+    if (typeof payload.canControlPlayback === 'boolean') {
+      this.canControlPlayback = payload.canControlPlayback;
+    } else {
+      this.canControlPlayback = !!(this.isHost || this.isCohost);
+    }
+    if (typeof payload.canModerateQueue === 'boolean') {
+      this.canModerateQueue = payload.canModerateQueue;
+    } else {
+      this.canModerateQueue = !!(this.isHost || this.isCohost);
+    }
+    if (typeof payload.queueLocked === 'boolean') this.queueLocked = payload.queueLocked;
+    if (typeof payload.skipVotes === 'number') this.skipVotes = payload.skipVotes;
+    if (typeof payload.skipNeeded === 'number') this.skipNeeded = payload.skipNeeded;
+    if (typeof payload.hasSkipVoted === 'boolean') this.hasSkipVoted = payload.hasSkipVoted;
+
+    const me = this.lastUsers.find((u) => u.id === this.currentClientID);
+    if (me) {
+      this.isHost = !!me.isHost;
+      this.isCohost = !!me.isCohost;
+      this.canControlPlayback = this.isHost || this.isCohost;
+      this.canModerateQueue = this.isHost || this.isCohost;
+    }
+
+    const hostBadge = document.getElementById('hostBadge');
+    if (hostBadge) hostBadge.style.display = this.isHost ? 'inline-flex' : 'none';
+    const cohostBadge = document.getElementById('cohostBadge');
+    if (cohostBadge) cohostBadge.style.display = (!this.isHost && this.isCohost) ? 'inline-flex' : 'none';
+
+    const btnSkipNow = document.getElementById('btnSkipNow');
+    if (btnSkipNow) btnSkipNow.hidden = !this.canControlPlayback;
+
+    const skipTally = document.getElementById('skipTally');
+    if (skipTally) skipTally.textContent = `${this.skipVotes}/${this.skipNeeded || 1}`;
+
+    const btnVoteSkip = document.getElementById('btnVoteSkip');
+    if (btnVoteSkip) btnVoteSkip.disabled = !!this.hasSkipVoted;
+
+    const btnQueueLock = document.getElementById('btnQueueLock');
+    if (btnQueueLock) {
+      btnQueueLock.hidden = !this.canModerateQueue;
+      btnQueueLock.textContent = this.queueLocked ? t('unlock_queue') : t('lock_queue');
+    }
+    const queueLockHint = document.getElementById('queueLockHint');
+    if (queueLockHint) {
+      queueLockHint.hidden = !this.queueLocked;
+    }
+
+    this.renderQueue();
   }
 
   initWebSocket() {
@@ -649,13 +729,9 @@ class TwinTubeApp {
       this.hasJoined = true;
       document.body.classList.remove('room-gated');
       this.currentClientID = payload.clientId || '';
-      this.isHost = payload.isHost;
       this.playlist = payload.playlist || [];
-
-      const hostBadge = document.getElementById('hostBadge');
-      if (hostBadge) {
-        hostBadge.style.display = this.isHost ? 'inline-flex' : 'none';
-      }
+      this.lastUsers = payload.users || [];
+      this.applyRoleState(payload);
 
       if (payload.video) {
         this.updateVideoMeta(payload.video.title, payload.video.status);
@@ -670,7 +746,6 @@ class TwinTubeApp {
       }
 
       this.renderQueue();
-      this.lastUsers = payload.users || [];
       this.renderViewersList();
     });
 
@@ -705,7 +780,21 @@ class TwinTubeApp {
 
     this.ws.on('USER_LIST', (users) => {
       this.lastUsers = users || [];
+      this.applyRoleState({});
       this.renderViewersList();
+    });
+
+    this.ws.on('ROOM_META', (payload) => {
+      const prevVotes = this.skipVotes;
+      this.applyRoleState(payload || {});
+      if ((payload?.skipVotes || 0) === 0) {
+        this.hasSkipVoted = false;
+        const btn = document.getElementById('btnVoteSkip');
+        if (btn) btn.disabled = false;
+      } else if (payload?.skipVotes > prevVotes && this.hasSkipVoted) {
+        const btn = document.getElementById('btnVoteSkip');
+        if (btn) btn.disabled = true;
+      }
     });
 
     this.ws.on('VIDEO_REACTION', (payload) => {
@@ -974,12 +1063,13 @@ class TwinTubeApp {
   }
 
   renderQueue() {
-    this.ui.renderQueue(
-      this.playlist,
-      this.isHost,
-      (itemId) => this.ws.sendAction('PLAY_QUEUE_ITEM', { itemId }),
-      (itemId) => this.ws.sendAction('REMOVE_QUEUE_ITEM', { itemId })
-    );
+    this.ui.renderQueue(this.playlist, {
+      canControlPlayback: this.canControlPlayback,
+      canModerateQueue: this.canModerateQueue,
+      onPlayItem: (itemId) => this.ws.sendAction('PLAY_QUEUE_ITEM', { itemId }),
+      onRemoveItem: (itemId) => this.ws.sendAction('REMOVE_QUEUE_ITEM', { itemId }),
+      onReorder: (order) => this.ws.sendAction('REORDER_QUEUE', { order })
+    });
   }
 
   updateVideoMeta(title, status) {
