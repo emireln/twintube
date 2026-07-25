@@ -57,21 +57,31 @@ export class AuthManager {
   }
 
   async updateProfile({ username, email, avatarUrl }) {
+    if (!this.token) {
+      throw new Error('Not signed in');
+    }
+
     const resp = await fetch('/api/auth/profile', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`
       },
-      body: JSON.stringify({ username, email, avatarUrl })
+      body: JSON.stringify({ username, email, avatarUrl: avatarUrl || '' })
     });
 
-    const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error(data.error || 'Failed to update profile');
+    let data = {};
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = {};
     }
 
-    if (data.token) {
+    if (!resp.ok) {
+      throw new Error(data.error || `Failed to update profile (${resp.status})`);
+    }
+
+    if (data.token && data.user) {
       this.setAuthData(data.token, data.user);
     } else if (data.user) {
       this.user = data.user;
@@ -82,6 +92,10 @@ export class AuthManager {
   }
 
   async changePassword(currentPassword, newPassword) {
+    if (!this.token) {
+      throw new Error('Not signed in');
+    }
+
     const resp = await fetch('/api/auth/password', {
       method: 'PUT',
       headers: {
@@ -91,9 +105,15 @@ export class AuthManager {
       body: JSON.stringify({ currentPassword, newPassword })
     });
 
-    const data = await resp.json();
+    let data = {};
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = {};
+    }
+
     if (!resp.ok) {
-      throw new Error(data.error || 'Failed to change password');
+      throw new Error(data.error || `Failed to change password (${resp.status})`);
     }
     return data;
   }

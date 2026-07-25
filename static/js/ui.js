@@ -1,4 +1,4 @@
-import { getLanguage, setLanguage, updateDOMTranslations, t } from './i18n.js';
+import { getLanguage, getLanguageLabel, setLanguage, updateDOMTranslations, t } from './i18n.js';
 
 export class UIManager {
   constructor() {
@@ -8,7 +8,7 @@ export class UIManager {
     this.settingsAuth = null;
     this.initTheme();
     this.initTabs();
-    this.initLangPicker();
+    this.initSettingsLangPicker();
     this.initSettings();
   }
 
@@ -16,11 +16,25 @@ export class UIManager {
     this.settingsAuth = auth;
   }
 
-  initLangPicker() {
-    const picker = document.getElementById('langPicker');
-    const btn = document.getElementById('btnLangPicker');
-    const menu = document.getElementById('langPickerMenu');
+  closeSettingsLangPicker() {
+    const picker = document.getElementById('settingsLangPicker');
+    const btn = document.getElementById('btnSettingsLangPicker');
+    if (picker) picker.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
 
+  syncSettingsLangPicker() {
+    const label = document.getElementById('settingsLangPickerLabel');
+    if (label) label.textContent = getLanguageLabel();
+    document.querySelectorAll('#settingsLangPickerMenu .lang-picker-option').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === getLanguage());
+    });
+  }
+
+  initSettingsLangPicker() {
+    const picker = document.getElementById('settingsLangPicker');
+    const btn = document.getElementById('btnSettingsLangPicker');
+    const menu = document.getElementById('settingsLangPickerMenu');
     if (!picker || !btn || !menu) return;
 
     btn.addEventListener('click', (e) => {
@@ -34,31 +48,39 @@ export class UIManager {
         e.stopPropagation();
         const lang = option.getAttribute('data-lang');
         if (lang) setLanguage(lang);
-        picker.classList.remove('open');
-        btn.setAttribute('aria-expanded', 'false');
+        this.syncSettingsLangPicker();
+        this.closeSettingsLangPicker();
       });
     });
 
-    document.addEventListener('click', () => {
-      picker.classList.remove('open');
-      btn.setAttribute('aria-expanded', 'false');
+    document.addEventListener('click', (e) => {
+      if (picker.contains(e.target)) return;
+      this.closeSettingsLangPicker();
     });
+  }
+
+  async openSettings() {
+    if (this.settingsAuth) {
+      await this.settingsAuth.checkAuth();
+    }
+    this.populateSettingsForm(this.settingsAuth);
+    this.syncSettingsLangPicker();
+    this.closeSettingsLangPicker();
+    this.showModal('settingsModal');
   }
 
   initSettings() {
     const btnClose = document.getElementById('btnCloseSettings');
-    const langSelect = document.getElementById('settingLangSelect');
     const btnSaveProfile = document.getElementById('btnSaveProfile');
+    const btnSaveEmail = document.getElementById('btnSaveEmail');
     const btnChangePassword = document.getElementById('btnChangePassword');
     const btnRandomAvatar = document.getElementById('btnRandomAvatar');
 
     if (btnClose) {
-      btnClose.addEventListener('click', () => this.hideModal('settingsModal'));
-    }
-
-    if (langSelect) {
-      langSelect.value = getLanguage();
-      langSelect.addEventListener('change', (e) => setLanguage(e.target.value));
+      btnClose.addEventListener('click', () => {
+        this.closeSettingsLangPicker();
+        this.hideModal('settingsModal');
+      });
     }
 
     if (btnRandomAvatar) {
@@ -75,14 +97,26 @@ export class UIManager {
 
     if (btnSaveProfile) {
       btnSaveProfile.addEventListener('click', async () => {
-        if (!this.settingsAuth?.isLoggedIn()) return;
+        const auth = this.settingsAuth;
+        if (!auth?.isLoggedIn()) {
+          this.showToast(t('profile_login_hint'));
+          return;
+        }
         const username = document.getElementById('settingProfileUsername')?.value.trim();
-        const email = document.getElementById('settingProfileEmail')?.value.trim();
         const avatarUrl = document.getElementById('settingProfileAvatar')?.value.trim();
+        const user = auth.getUser();
+        if (!username) {
+          this.showToast(t('profile_update_fail'));
+          return;
+        }
         btnSaveProfile.disabled = true;
         try {
-          await this.settingsAuth.updateProfile({ username, email, avatarUrl });
-          this.updateUserNavUI(this.settingsAuth);
+          await auth.updateProfile({
+            username,
+            email: user.email,
+            avatarUrl: avatarUrl || user.avatarUrl || ''
+          });
+          this.updateUserNavUI(auth);
           this.showToast(t('profile_updated'));
         } catch (err) {
           this.showToast(err.message || t('profile_update_fail'));
@@ -92,19 +126,67 @@ export class UIManager {
       });
     }
 
+    if (btnSaveEmail) {
+      btnSaveEmail.addEventListener('click', async () => {
+        const auth = this.settingsAuth;
+        if (!auth?.isLoggedIn()) {
+          this.showToast(t('profile_login_hint'));
+          return;
+        }
+        const email = document.getElementById('settingProfileEmail')?.value.trim().toLowerCase();
+        const confirm = document.getElementById('settingConfirmEmail')?.value.trim().toLowerCase();
+        if (!email) {
+          this.showToast(t('profile_update_fail'));
+          return;
+        }
+        if (email !== confirm) {
+          this.showToast(t('email_mismatch'));
+          return;
+        }
+        const user = auth.getUser();
+        if (email === (user.email || '').toLowerCase()) {
+          this.showToast(t('email_unchanged'));
+          return;
+        }
+        btnSaveEmail.disabled = true;
+        try {
+          await auth.updateProfile({
+            username: user.username,
+            email,
+            avatarUrl: user.avatarUrl || ''
+          });
+          this.updateUserNavUI(auth);
+          document.getElementById('settingConfirmEmail').value = email;
+          this.showToast(t('email_updated'));
+        } catch (err) {
+          this.showToast(err.message || t('profile_update_fail'));
+        } finally {
+          btnSaveEmail.disabled = false;
+        }
+      });
+    }
+
     if (btnChangePassword) {
       btnChangePassword.addEventListener('click', async () => {
-        if (!this.settingsAuth?.isLoggedIn()) return;
+        const auth = this.settingsAuth;
+        if (!auth?.isLoggedIn()) {
+          this.showToast(t('profile_login_hint'));
+          return;
+        }
         const current = document.getElementById('settingCurrentPassword')?.value || '';
         const next = document.getElementById('settingNewPassword')?.value || '';
         const confirm = document.getElementById('settingConfirmPassword')?.value || '';
+        if (!current || !next) {
+          this.showToast(t('password_change_fail'));
+          return;
+        }
         if (next !== confirm) {
           this.showToast(t('password_mismatch'));
           return;
         }
         btnChangePassword.disabled = true;
         try {
-          await this.settingsAuth.changePassword(current, next);
+          await auth.changePassword(current, next);
           document.getElementById('settingCurrentPassword').value = '';
           document.getElementById('settingNewPassword').value = '';
           document.getElementById('settingConfirmPassword').value = '';
@@ -122,7 +204,10 @@ export class UIManager {
     if (avatarInput && avatarPreview) {
       avatarInput.addEventListener('input', () => {
         const url = avatarInput.value.trim();
-        avatarPreview.src = url || '';
+        if (url) avatarPreview.src = url;
+      });
+      avatarPreview.addEventListener('error', () => {
+        avatarPreview.src = '';
       });
     }
 
@@ -131,28 +216,38 @@ export class UIManager {
 
   populateSettingsForm(auth) {
     const profileSection = document.getElementById('settingsProfileSection');
+    const emailSection = document.getElementById('settingsEmailSection');
     const passwordSection = document.getElementById('settingsPasswordSection');
-    const passwordDivider = document.getElementById('settingsPasswordDivider');
     const loginHint = document.getElementById('settingsLoginHint');
     const loggedIn = auth?.isLoggedIn();
 
-    if (profileSection) profileSection.style.display = loggedIn ? 'flex' : 'none';
-    if (passwordSection) passwordSection.style.display = loggedIn ? 'flex' : 'none';
-    if (passwordDivider) passwordDivider.style.display = loggedIn ? 'block' : 'none';
-    if (loginHint) loginHint.style.display = loggedIn ? 'none' : 'block';
+    if (profileSection) profileSection.hidden = !loggedIn;
+    if (emailSection) emailSection.hidden = !loggedIn;
+    if (passwordSection) passwordSection.hidden = !loggedIn;
+    if (loginHint) loginHint.hidden = loggedIn;
 
     if (!loggedIn) return;
 
     const user = auth.getUser();
     const usernameEl = document.getElementById('settingProfileUsername');
     const emailEl = document.getElementById('settingProfileEmail');
+    const confirmEmailEl = document.getElementById('settingConfirmEmail');
     const avatarEl = document.getElementById('settingProfileAvatar');
     const previewEl = document.getElementById('settingProfileAvatarPreview');
 
     if (usernameEl) usernameEl.value = user.username || '';
     if (emailEl) emailEl.value = user.email || '';
+    if (confirmEmailEl) confirmEmailEl.value = user.email || '';
     if (avatarEl) avatarEl.value = user.avatarUrl || '';
-    if (previewEl && user.avatarUrl) previewEl.src = user.avatarUrl;
+    if (previewEl) {
+      previewEl.src = user.avatarUrl || '';
+      previewEl.alt = user.username || '';
+    }
+
+    ['settingCurrentPassword', 'settingNewPassword', 'settingConfirmPassword'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
   }
 
   updateUserNavUI(auth) {
@@ -204,10 +299,7 @@ export class UIManager {
         e.preventDefault();
         const dropdown = document.getElementById('profileDropdown');
         if (dropdown) dropdown.classList.remove('active');
-        const langSelect = document.getElementById('settingLangSelect');
-        if (langSelect) langSelect.value = getLanguage();
-        this.populateSettingsForm(this.settingsAuth);
-        this.showModal('settingsModal');
+        await this.openSettings();
         return;
       }
 

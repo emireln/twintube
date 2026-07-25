@@ -70,10 +70,19 @@ const translations = {
     portuguese: "Português (BR)",
     profile_section: "Profile",
     profile_desc: "Update your display name, email, and avatar",
+    profile_identity_desc: "Update your display name and avatar image",
     display_name: "Display name",
     avatar_url: "Avatar image URL",
     avatar_randomize: "Randomize",
     save_profile: "Save Profile",
+    save_display_name: "Save name & avatar",
+    new_email: "New email",
+    confirm_email: "Confirm email",
+    email_change_desc: "Change the email linked to your account",
+    save_email: "Update email",
+    email_mismatch: "Email addresses do not match",
+    email_updated: "Email updated successfully",
+    email_unchanged: "Email is unchanged",
     password_section: "Password",
     password_desc: "Change your account password",
     current_password: "Current password",
@@ -166,10 +175,19 @@ const translations = {
     portuguese: "Português (BR)",
     profile_section: "Perfil",
     profile_desc: "Atualize seu nome, e-mail e avatar",
+    profile_identity_desc: "Atualize seu nome de exibição e imagem do avatar",
     display_name: "Nome de exibição",
     avatar_url: "URL da imagem do avatar",
     avatar_randomize: "Aleatorizar",
     save_profile: "Salvar Perfil",
+    save_display_name: "Salvar nome e avatar",
+    new_email: "Novo e-mail",
+    confirm_email: "Confirmar e-mail",
+    email_change_desc: "Altere o e-mail vinculado à sua conta",
+    save_email: "Atualizar e-mail",
+    email_mismatch: "Os e-mails não coincidem",
+    email_updated: "E-mail atualizado com sucesso",
+    email_unchanged: "O e-mail não foi alterado",
     password_section: "Senha",
     password_desc: "Altere a senha da sua conta",
     current_password: "Senha atual",
@@ -197,8 +215,28 @@ const translations = {
 
 const langLabels = { en: 'EN', pt: 'PT' };
 
-let currentLang = localStorage.getItem('twintube_lang') || 'en';
-if (!translations[currentLang]) currentLang = 'en';
+function detectBrowserLanguage() {
+  const langs = navigator.languages?.length
+    ? navigator.languages
+    : [navigator.language || 'en'];
+  for (const lang of langs) {
+    const code = (lang || '').toLowerCase().split('-')[0];
+    if (code === 'pt') return 'pt';
+    if (code === 'en') return 'en';
+  }
+  return 'en';
+}
+
+let currentLang = localStorage.getItem('twintube_lang');
+if (!currentLang || !translations[currentLang]) {
+  currentLang = detectBrowserLanguage();
+  localStorage.setItem('twintube_lang', currentLang);
+}
+
+export function getLanguageLabel(lang) {
+  const code = lang || currentLang;
+  return code === 'pt' ? translations.pt.portuguese : translations.en.english;
+}
 
 export function getLanguage() {
   return currentLang;
@@ -235,18 +273,10 @@ export function updateDOMTranslations() {
     if (key) el.setAttribute('title', t(key));
   });
 
-  document.querySelectorAll('#settingLangSelect option[data-i18n]').forEach(opt => {
-    const key = opt.getAttribute('data-i18n');
-    if (key) opt.textContent = t(key);
-  });
+  const settingsLangLabel = document.getElementById('settingsLangPickerLabel');
+  if (settingsLangLabel) settingsLangLabel.textContent = getLanguageLabel();
 
-  const langLabel = document.getElementById('langPickerLabel');
-  if (langLabel) langLabel.textContent = langLabels[currentLang] || 'EN';
-
-  document.querySelectorAll('.lang-picker-option').forEach(btn => {
+  document.querySelectorAll('#settingsLangPickerMenu .lang-picker-option').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
   });
-
-  const langSelect = document.getElementById('settingLangSelect');
-  if (langSelect) langSelect.value = currentLang;
 }
