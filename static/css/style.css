@@ -123,9 +123,13 @@ body.room-body.room-gated .modal-overlay.active {
 .mobile-room-bar,
 .room-drawer-backdrop,
 .mobile-bottom-nav,
-.drawer-close-btn,
 .drawer-section-label {
   display: none;
+}
+
+/* Must beat .tool-btn { display: inline-flex } or the drawer X shows next to the logo */
+.drawer-close-btn {
+  display: none !important;
 }
 
 .drawer-header {
@@ -242,10 +246,11 @@ body.room-body.room-gated .modal-overlay.active {
 .tool-btn[data-tooltip]:hover::after {
   content: attr(title);
   position: absolute;
-  top: calc(100% + 8px);
+  bottom: calc(100% + 8px);
+  top: auto;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: 300;
   padding: 6px 10px;
   border-radius: 6px;
   background: #202124;
@@ -260,6 +265,13 @@ body.room-body.room-gated .modal-overlay.active {
 
 .tool-btn[data-tooltip]:hover::after {
   content: attr(data-tooltip);
+}
+
+/* Navbar search sits near the top — keep those tooltips below the button */
+.navbar .tool-btn[title]:hover::after,
+.navbar .tool-btn[data-tooltip]:hover::after {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 .control-cluster {
@@ -285,65 +297,6 @@ body.room-body.room-gated .modal-overlay.active {
   min-width: 0;
   max-width: 560px;
   margin: 0 auto;
-}
-
-.media-mode-toggle {
-  display: inline-flex;
-  flex-shrink: 0;
-  border: 1px solid var(--md-outline);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: var(--md-surface-variant);
-  padding: 2px;
-  gap: 0;
-}
-
-.media-mode-btn {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--md-on-surface-variant);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.media-mode-btn .material-symbols-outlined {
-  font-size: 18px;
-}
-
-.media-mode-btn.active {
-  background: var(--md-primary);
-  color: #fff;
-}
-
-.media-mode-btn:hover:not(.active) {
-  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
-}
-
-.media-mode-btn[title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: #202124;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: var(--md-shadow-2);
 }
 
 .player-wrapper.drag-over {
@@ -465,11 +418,13 @@ body.room-body.room-gated .modal-overlay.active {
   width: 38px;
   height: 38px;
   padding: 0;
-  border-radius: 50% !important;
+  border-radius: 50%;
   background: transparent;
-  color: var(--md-on-surface);
+  color: var(--md-on-surface-variant);
   border: none;
-  display: flex;
+  outline: none;
+  box-shadow: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -483,10 +438,16 @@ body.room-body.room-gated .modal-overlay.active {
   color: var(--md-on-surface);
 }
 
+.nav-icon-btn:focus,
+.nav-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .nav-icon-btn:active,
 .nav-icon-btn.is-active {
   background-color: var(--md-primary-container);
-  color: var(--md-primary);
+  color: var(--md-on-primary-container);
 }
 
 .support-btn {
@@ -501,12 +462,12 @@ body.room-body.room-gated .modal-overlay.active {
 }
 
 .room-bmc-btn {
-  background: #ffdd00;
-  color: #0d0c22;
+  background: transparent;
+  color: var(--md-on-surface-variant);
 }
 
 .room-bmc-btn:hover {
-  background: #ffe74d;
+  background: #ffdd00;
   color: #0d0c22;
 }
 
@@ -544,6 +505,54 @@ body.room-body.room-gated .modal-overlay.active {
   font-size: 13px;
   color: var(--md-on-surface-variant);
   line-height: 1.4;
+}
+
+.landing-download-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 28px 0 8px;
+}
+
+.btn-download-desktop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline);
+  text-decoration: none;
+  font-family: var(--font-brand);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--md-shadow-1);
+  transition: background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.btn-download-desktop:hover {
+  background: var(--md-surface-variant);
+  transform: translateY(-1px);
+  box-shadow: var(--md-shadow-2);
+}
+
+.landing-download-caption {
+  margin: 0;
+  max-width: 360px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+body.desktop-app .landing-subtitle,
+body.desktop-app .landing-download-cta,
+html.desktop-app .landing-subtitle,
+html.desktop-app .landing-download-cta {
+  display: none !important;
 }
 
 /* User Profile & Dropdown */
@@ -917,7 +926,7 @@ body.theater-mode .player-wrapper {
   gap: 16px;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .player-wrapper {
@@ -929,12 +938,22 @@ body.theater-mode .player-wrapper {
   overflow: hidden;
   box-shadow: var(--md-shadow-2);
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.player-wrapper iframe, .player-wrapper video {
+/* Fill the stage so YT iframe / HTML5 never init at 0×0 (black screen) */
+#ytPlayer,
+#html5Player,
+#genericPlayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #000;
+}
+
+.player-wrapper iframe,
+.player-wrapper video {
   width: 100%;
   height: 100%;
   border: none;
@@ -2654,24 +2673,27 @@ body.theater-mode .floating-reaction img {
     width: 100%;
     max-width: none;
     margin: 0;
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
   }
 
-  body.room-body .navbar .top-video-bar .media-mode-toggle {
-    align-self: flex-start;
-  }
-
   body.room-body .navbar .top-input {
-    width: 100%;
+    flex: 1 1 160px;
+    width: auto;
+    min-width: 0;
     font-size: 16px !important;
   }
 
   body.room-body .navbar .top-video-bar > .tool-btn {
-    width: 100%;
+    width: 44px;
     height: 44px;
-    border-radius: var(--radius-md);
+    border-radius: 50%;
+  }
+
+  body.room-body .navbar .top-video-bar > .tool-btn-primary {
+    margin-left: auto;
   }
 
   body.room-body .navbar .nav-actions {
@@ -2682,7 +2704,16 @@ body.theater-mode .floating-reaction img {
     width: 100%;
   }
 
-  body.room-body .navbar .nav-icon-btn,
+  /* Keep icon buttons compact — full-width stretch made BMC look broken */
+  body.room-body .navbar .nav-icon-btn {
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    align-self: flex-start;
+  }
+
   body.room-body .navbar .btn-nav,
   body.room-body .navbar .room-chip {
     width: 100%;
@@ -2795,14 +2826,8 @@ body.theater-mode .floating-reaction img {
     flex: 1 1 auto;
     justify-content: flex-end;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    overflow: visible;
     gap: 2px;
-  }
-
-  body.room-body .player-controls-meta::-webkit-scrollbar {
-    display: none;
   }
 
   body.room-body .moments-panel {
@@ -2982,12 +3007,15 @@ body.theater-mode .floating-reaction img {
     padding: 8px 10px;
   }
 
-  #btnOpenAuthLogin,
-  #btnOpenAuthRegister,
-  #btnOpenAuth {
-    padding: 0 10px !important;
-    font-size: 11px !important;
-    height: 34px !important;
+  .landing-body .navbar .nav-actions {
+    gap: 8px;
+  }
+
+  .landing-body #btnOpenAuth {
+    padding: 0 14px;
+    font-size: 13px;
+    height: 36px;
+    white-space: nowrap;
   }
 
   .landing-hero-title {

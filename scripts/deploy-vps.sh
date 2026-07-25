@@ -18,6 +18,8 @@ export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "==> Deploying TwinTube v${VERSION} (${GIT_COMMIT})"
 
+mkdir -p "$APP_DIR/downloads"
+
 docker compose --env-file .env -f "$COMPOSE_FILE" pull --ignore-buildable 2>/dev/null || true
 docker compose --env-file .env -f "$COMPOSE_FILE" build --no-cache
 docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans

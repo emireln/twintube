@@ -45,18 +45,10 @@
 
     <p class="drawer-section-label" data-i18n="drawer_add_video">Add video</p>
     <form class="top-video-bar" id="topVideoForm">
-      <div class="media-mode-toggle" role="group" aria-label="Add media">
-        <button type="button" class="media-mode-btn active" id="btnMediaModeLink" data-mode="link" data-i18n-title="media_mode_link" title="Link" aria-label="Link">
-          <span class="material-symbols-outlined" aria-hidden="true">link</span>
-        </button>
-        <button type="button" class="media-mode-btn" id="btnMediaModeLocal" data-mode="local" data-i18n-title="media_mode_local" title="Local" aria-label="Local">
-          <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-        </button>
-      </div>
-      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
-      <button type="button" class="tool-btn" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" aria-label="Choose file" hidden>
-        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+      <button type="button" class="tool-btn" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" aria-label="Choose file">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
       </button>
+      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
       <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
       <button type="submit" class="tool-btn tool-btn-primary" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video" aria-label="Add">
         <span class="material-symbols-outlined" aria-hidden="true">add</span>

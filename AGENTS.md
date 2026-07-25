@@ -21,6 +21,7 @@ Rooms are **fully open by default**. Hosts can tighten permissions (playback, ad
 - **Auth & Security**: bcrypt, JWT (`jwt/v5`), security headers + CSP (`internal/security`)
 - **State**: In-memory thread-safe `RoomManager` / `Room` with optional DB persistence
 - **Voice**: Optional STUN/TURN via `/api/rtc/config` + coturn compose profile
+- **Desktop**: Electron Windows client wraps `https://twintube.site/?desktop=1` with tray + auto-update
 
 ### Frontend
 - **Pages**: Landing (`static/index.html`) & Watch Room (`static/room.html`)
@@ -28,6 +29,7 @@ Rooms are **fully open by default**. Hosts can tighten permissions (playback, ad
 - **Modules**: `landing.js`, `app.js`, `auth.js`, `player.js`, `ws.js`, `ui.js`, `i18n.js`, `localmedia.js`, `voice.js`
 - **i18n**: English + Portuguese (`static/js/i18n.js`)
 - **Players**: YouTube iFrame API, HTML5 video, generic iframe embeds
+- **Desktop flag**: `?desktop=1` / `window.twintubeDesktop` hides landing hero subtitle + Windows download CTA
 
 ---
 
@@ -40,6 +42,8 @@ twintube/
 ├── Dockerfile
 ├── docker-compose.yml      # App + PostgreSQL 16
 ├── .env.example
+├── desktop/                # Electron Windows client (NSIS setup.exe)
+├── downloads/              # Runtime installer artifacts (VPS volume; not in image)
 ├── deploy/                 # Production Caddy/nginx + compose with optional coturn
 ├── internal/
 │   ├── api/                # REST: rooms, RTC config
@@ -51,6 +55,8 @@ twintube/
 │   └── version/
 └── static/
     ├── index.html / room.html
+    ├── desktop-logo.png    # Desktop / installer branding
+    ├── tray.ico            # Desktop tray icon
     ├── bmc-button.png      # Landing page Buy Me a Coffee CTA
     ├── bmc-logo.svg        # Room-header support icon
     ├── gifs/               # Reaction WebPs
@@ -59,6 +65,13 @@ twintube/
 ```
 
 > Prefer root `main.go` as the source of truth. Ignore or delete stale `cmd/server` if it reappears.
+
+### Desktop Windows client
+- Loads live site with `?desktop=1` (no bundled Go server).
+- Tray menu EN/PT; auto-updater reads `https://twintube.site/downloads/latest.yml`.
+- Build: `cd desktop && npm ci && npm run dist` → `TwinTube-Setup-<version>.exe`.
+- CI publishes stable `/downloads/TwinTube-Setup.exe` + versioned installer + `latest.yml` to the VPS `downloads/` volume (mounted read-only at `/downloads` in the app container).
+- Server env: `DOWNLOADS_DIR` (default `./downloads`).
 
 ---
 
@@ -127,6 +140,7 @@ Host/co-host always bypass. Approve/reject moments remain controller-only.
 - Mobile room (≤900px): header → left drawer; Chat/Queue/Viewers → bottom nav.
 - Avatars: render `avatarUrl` in chat + viewers; fall back to initials.
 - BMC: `bmc-button.png` on landing footer only; `bmc-logo.svg` in **room** header only.
+- Landing Windows download CTA links to `/downloads/TwinTube-Setup.exe` (hidden in desktop app).
 
 ---
 
@@ -140,6 +154,14 @@ go build -o twintube.exe .
 ./twintube.exe
 ```
 Open `http://localhost:8080`.
+
+### Windows desktop client
+```bash
+cd desktop
+npm ci
+npm start          # loads live site with ?desktop=1
+npm run dist       # NSIS TwinTube-Setup-<version>.exe
+```
 
 ### Docker (app + Postgres)
 ```bash

@@ -7,6 +7,12 @@
 twintube
 twintube.exe
 
+# Desktop build outputs
+desktop/node_modules/
+desktop/dist/
+downloads/*
+!downloads/.gitkeep
+
 # Database files
 *.db
 *.sqlite
@@ -20,3 +26,4 @@ twintube.exe
 Thumbs.db
 .vscode/
 .idea/
+.cursor/

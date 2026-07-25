@@ -38,8 +38,90 @@ jobs:
           git commit -m "chore: bump version to v${{ steps.bump.outputs.version }} [skip ci]"
           git push
 
-  deploy:
+  build-desktop:
     needs: bump-version
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Sync VERSION after bump commit
+        shell: bash
+        run: git pull origin main
+
+      - name: Sync desktop package version
+        shell: bash
+        run: |
+          chmod +x scripts/sync-desktop-version.sh
+          ./scripts/sync-desktop-version.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build Windows NSIS installer
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Prepare download artifacts
+        shell: bash
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          mkdir -p desktop-artifacts
+          SETUP=$(ls desktop/dist/TwinTube-Setup-*.exe | head -n 1)
+          test -n "$SETUP"
+          cp "$SETUP" "desktop-artifacts/TwinTube-Setup-${VERSION}.exe"
+          cp "$SETUP" desktop-artifacts/TwinTube-Setup.exe
+          if [ -f "${SETUP}.blockmap" ]; then
+            cp "${SETUP}.blockmap" "desktop-artifacts/TwinTube-Setup-${VERSION}.exe.blockmap"
+          fi
+          if [ -f desktop/dist/latest.yml ]; then
+            cp desktop/dist/latest.yml desktop-artifacts/latest.yml
+          else
+            echo "::error::latest.yml missing from electron-builder output"
+            ls -la desktop/dist || true
+            exit 1
+          fi
+          # Keep latest.yml pointing at the versioned installer name.
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          version = Path('VERSION').read_text(encoding='utf-8').strip()
+          yml = Path('desktop-artifacts/latest.yml')
+          text = yml.read_text(encoding='utf-8')
+          text = re.sub(r'(?m)^path:\s*.*$', f'path: TwinTube-Setup-{version}.exe', text)
+          text = re.sub(
+              r'(?m)^(\s*-\s*url:\s*).*$',
+              rf'\1TwinTube-Setup-{version}.exe',
+              text,
+              count=1,
+          )
+          yml.write_text(text, encoding='utf-8')
+          print(yml.read_text(encoding='utf-8'))
+          PY
+          ls -lah desktop-artifacts
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: twintube-windows-installer
+          path: desktop-artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    needs: [bump-version, build-desktop]
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
     steps:
@@ -57,6 +139,24 @@ jobs:
           echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: twintube-windows-installer
+          path: desktop-artifacts
+
+      - name: Publish installer to VPS downloads
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          source: "desktop-artifacts/*"
+          target: "${{ secrets.VPS_APP_DIR }}/downloads"
+          strip_components: 1
+          overwrite: true
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -70,6 +170,7 @@ jobs:
             cd "${{ secrets.VPS_APP_DIR }}"
             git fetch origin main
             git reset --hard origin/main
+            mkdir -p downloads
             chmod +x scripts/deploy-vps.sh
             export VPS_APP_DIR="${{ secrets.VPS_APP_DIR }}"
             ./scripts/deploy-vps.sh
@@ -87,16 +188,34 @@ jobs:
               LIVE_VERSION=$(echo "$BODY" | jq -r '.version // empty')
               echo "Attempt $attempt: live commit=$DEPLOYED version=$LIVE_VERSION (expected commit=$EXPECTED version=$VERSION)"
               if [ "$DEPLOYED" = "$EXPECTED" ]; then
-                echo "Deployment verified successfully."
-                exit 0
+                echo "API deployment verified."
+                break
               fi
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "::error::Live site did not report commit $EXPECTED after deploy."
+              curl -s "https://twintube.site/api/version" || true
+              exit 1
             fi
             sleep 6
           done
-          echo "::error::Live site did not report commit $EXPECTED after deploy."
-          curl -s "https://twintube.site/api/version" || true
-          exit 1
+
+          echo "Verifying desktop downloads..."
+          for path in \
+            "/downloads/TwinTube-Setup.exe" \
+            "/downloads/TwinTube-Setup-${VERSION}.exe" \
+            "/downloads/latest.yml"
+          do
+            CODE=$(curl -sI -o /dev/null -w "%{http_code}" "https://twintube.site${path}" || true)
+            echo "$path -> HTTP $CODE"
+            if [ "$CODE" != "200" ]; then
+              echo "::error::Expected HTTP 200 for $path"
+              exit 1
+            fi
+          done
+          echo "Desktop downloads verified."
 
       - name: Deployment summary
         run: |
           echo "Deployed TwinTube v$(cat VERSION) (${{ steps.meta.outputs.commit }}) to https://twintube.site"
+          echo "Windows installer: https://twintube.site/downloads/TwinTube-Setup.exe"

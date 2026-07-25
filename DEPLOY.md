@@ -51,9 +51,12 @@ openssl rand -hex 24   # POSTGRES_PASSWORD
 ### 4. First deploy
 
 ```bash
+mkdir -p downloads
 chmod +x scripts/deploy-vps.sh
 ./scripts/deploy-vps.sh
 ```
+
+Desktop installers are stored in `/opt/twintube/downloads` and mounted read-only into the app container at `/downloads`. GitHub Actions uploads `TwinTube-Setup.exe`, the versioned installer, `latest.yml`, and blockmap files on each deploy.
 
 ---
 
@@ -81,6 +84,7 @@ chmod +x scripts/deploy-vps.sh
 | `JWT_SECRET` | JWT signing key |
 | `ACME_EMAIL` | Let's Encrypt email |
 | `DATABASE_URL` | Postgres connection URL |
+| `DOWNLOADS_DIR` | Optional; container path for installers (default `/downloads`) |
 
 ---
 
@@ -98,7 +102,13 @@ The VPS must have **git** installed and the repo cloned so `git fetch origin mai
 
 ## Auto deploy
 
-Every push to `main` bumps `VERSION` patch and deploys via `.github/workflows/deploy.yml`.
+Push to `main` runs:
+
+1. Patch-bump `VERSION`
+2. Build Windows NSIS installer on `windows-latest`
+3. SCP installer + `latest.yml` to `$VPS_APP_DIR/downloads`
+4. SSH deploy (`scripts/deploy-vps.sh`)
+5. Verify `/api/version` and `/downloads/TwinTube-Setup.exe`
 
 Manual redeploy on VPS:
 

@@ -104,6 +104,21 @@ func main() {
 	http.HandleFunc("/api/version", security.Wrap(handleVersion))
 	http.HandleFunc("/api/rtc/config", security.Wrap(api.HandleRTCConfig))
 
+	// Desktop installer / update feed (external volume in production)
+	downloadsDir := strings.TrimSpace(os.Getenv("DOWNLOADS_DIR"))
+	if downloadsDir == "" {
+		downloadsDir = filepath.Join(".", "downloads")
+	}
+	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+		log.Printf("[SERVER] Warning: could not create downloads dir %s: %v", downloadsDir, err)
+	}
+	downloadsFS := http.FileServer(http.Dir(downloadsDir))
+	http.Handle("/downloads/", security.Middleware(http.StripPrefix("/downloads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Encourage resumable downloads for large installers.
+		w.Header().Set("Accept-Ranges", "bytes")
+		downloadsFS.ServeHTTP(w, r)
+	}))))
+
 	// WebSocket & SPA Routes
 	http.HandleFunc("/ws", security.Wrap(handleWebSocket))
 	http.HandleFunc("/", security.Wrap(serveLandingOrRoom))
@@ -161,6 +176,10 @@ func serveLandingOrRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(path, "/room/") {
 		http.ServeFile(w, r, filepath.Join(".", "static", "room.html"))
+		return
+	}
+	if strings.HasPrefix(path, "/downloads/") {
+		http.NotFound(w, r)
 		return
 	}
 

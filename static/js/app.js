@@ -47,7 +47,6 @@ class TwinTubeApp {
     this.pendingLocalMatchId = '';
     this.currentLocalVideoId = '';
     this.lastLocalStatusKey = '';
-    this.mediaAddMode = 'link';
 
     document.body.classList.add('room-gated');
     this.init();
@@ -55,31 +54,6 @@ class TwinTubeApp {
 
   isVideoFile(file) {
     return !!(file && (file.type.startsWith('video/') || /\.(mp4|webm|ogg|mkv|mov)$/i.test(file.name || '')));
-  }
-
-  setupMediaModeToggle() {
-    const btnLink = document.getElementById('btnMediaModeLink');
-    const btnLocal = document.getElementById('btnMediaModeLocal');
-    const input = document.getElementById('topVideoInput');
-    const btnAddLink = document.getElementById('btnAddVideoLink');
-    const btnAddLocal = document.getElementById('btnAddLocalVideo');
-
-    const apply = (mode) => {
-      this.mediaAddMode = mode;
-      btnLink?.classList.toggle('active', mode === 'link');
-      btnLocal?.classList.toggle('active', mode === 'local');
-      if (input) {
-        input.hidden = mode !== 'link';
-        input.required = mode === 'link';
-      }
-      if (btnAddLink) btnAddLink.hidden = mode !== 'link';
-      if (btnAddLocal) btnAddLocal.hidden = mode !== 'local';
-      document.body.classList.toggle('local-add-mode', mode === 'local');
-    };
-
-    btnLink?.addEventListener('click', () => apply('link'));
-    btnLocal?.addEventListener('click', () => apply('local'));
-    apply('link');
   }
 
   setupPlayerDragDrop() {
@@ -282,6 +256,9 @@ class TwinTubeApp {
     if (btnResync) {
       btnResync.addEventListener('click', () => {
         this.forceNextSync = true;
+        if (this.player && typeof this.player.refreshSize === 'function') {
+          this.player.refreshSize();
+        }
         this.ws.sendAction('SYNC_REQUEST');
         this.ui.showToast(t('resyncing'));
       });
@@ -325,7 +302,6 @@ class TwinTubeApp {
           this.ui.showToast(t('permission_denied'));
           return;
         }
-        if (this.mediaAddMode === 'local') return;
         const url = topVideoInput.value.trim();
         if (url) {
           if (this.ws.sendAction('ADD_QUEUE', { url })) {
@@ -338,7 +314,6 @@ class TwinTubeApp {
       });
     }
 
-    this.setupMediaModeToggle();
     this.setupPlayerDragDrop();
 
     // Local file add (bytes stay on device; only a content id is shared for sync)
@@ -736,9 +711,7 @@ class TwinTubeApp {
     if (topVideoForm) {
       topVideoForm.classList.toggle('is-restricted', !this.canAddQueue);
       topVideoForm.querySelectorAll('input, button').forEach((el) => {
-        if (el.id === 'btnMediaModeLink' || el.id === 'btnMediaModeLocal') {
-          el.disabled = !this.canAddQueue;
-        } else if (el.tagName === 'INPUT' || el.type === 'submit' || el.id === 'btnAddVideoLink' || el.id === 'btnAddLocalVideo') {
+        if (el.tagName === 'INPUT' || el.type === 'submit' || el.id === 'btnAddVideoLink' || el.id === 'btnAddLocalVideo') {
           el.disabled = !this.canAddQueue;
         }
       });
@@ -957,17 +930,25 @@ class TwinTubeApp {
       this.pendingMoments = payload.pendingMoments || [];
       this.applyRoleState(payload);
 
-      if (payload.video) {
-        this.updateVideoMeta(payload.video.title, payload.video.status);
-        this.syncLocalPresence(payload.video.videoId || '');
-        if (this.player) {
-          this.player.applyServerState(
-            payload.video,
-            payload.video.serverTimestamp || timestamp,
-            { force: true, timeAlreadyAbsolute: true }
-          );
+      const applyVideo = () => {
+        if (payload.video) {
+          this.updateVideoMeta(payload.video.title, payload.video.status);
+          this.syncLocalPresence(payload.video.videoId || '');
+          if (this.player) {
+            this.player.refreshSize();
+            this.player.applyServerState(
+              payload.video,
+              payload.video.serverTimestamp || timestamp,
+              { force: true, timeAlreadyAbsolute: true }
+            );
+          }
         }
-      }
+      };
+
+      // Wait until the gated layout is painted so YT gets a real size (avoids black iframe).
+      requestAnimationFrame(() => {
+        requestAnimationFrame(applyVideo);
+      });
 
       this.renderQueue();
       this.renderViewersList();
@@ -980,6 +961,22 @@ class TwinTubeApp {
       if (this.player) {
         const force = this.forceNextSync || !!payload.forceReload;
         this.forceNextSync = false;
+        if (force && (payload.platform === 'youtube' || (!payload.platform && /^[a-zA-Z0-9_-]{11}$/.test(payload.videoId || '')))) {
+          // Blank iframe from a hidden init won't recover via loadVideoById alone.
+          const wrap = document.getElementById('playerWrapper');
+          const iframe = wrap && wrap.querySelector('#ytPlayer iframe, iframe');
+          const broken = !iframe || iframe.clientWidth < 2 || iframe.clientHeight < 2;
+          if (broken && typeof this.player.recreateYTPlayer === 'function') {
+            this.player.pendingServerState = {
+              videoState: { ...payload, platform: payload.platform || 'youtube' },
+              serverTimestamp: payload.serverTimestamp || timestamp,
+              options: { force: true, timeAlreadyAbsolute: true }
+            };
+            this.player.recreateYTPlayer(payload.videoId);
+            return;
+          }
+        }
+        this.player.refreshSize();
         this.player.applyServerState(
           payload,
           payload.serverTimestamp || timestamp,

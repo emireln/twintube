@@ -40,6 +40,7 @@ class LandingApp {
   }
 
   async init() {
+    this.applyDesktopMode();
     this.setupJoinRoom();
     this.setupAuthUI();
     await this.auth.checkAuth();
@@ -67,6 +68,15 @@ class LandingApp {
       },
       () => this.openCreateRoomModal()
     );
+  }
+
+  applyDesktopMode() {
+    const params = new URLSearchParams(window.location.search);
+    const isDesktop = params.get('desktop') === '1' || !!(window.twintubeDesktop && window.twintubeDesktop.isDesktop);
+    if (!isDesktop) return;
+    document.documentElement.classList.add('desktop-app');
+    document.body.classList.add('desktop-app');
+    window.twintubeIsDesktop = true;
   }
 
   openCreateRoomModal() {
@@ -243,8 +253,7 @@ class LandingApp {
   }
 
   setupAuthUI() {
-    const btnOpenLogin = document.getElementById('btnOpenAuthLogin');
-    const btnOpenRegister = document.getElementById('btnOpenAuthRegister');
+    const btnOpenAuth = document.getElementById('btnOpenAuth');
     const btnCloseAuth = document.getElementById('btnCloseAuth');
 
     const btnTabLogin = document.getElementById('btnTabLogin');
@@ -252,16 +261,9 @@ class LandingApp {
     const formLogin = document.getElementById('formLogin');
     const formRegister = document.getElementById('formRegister');
 
-    if (btnOpenLogin) {
-      btnOpenLogin.addEventListener('click', () => {
+    if (btnOpenAuth) {
+      btnOpenAuth.addEventListener('click', () => {
         if (btnTabLogin) btnTabLogin.click();
-        this.ui.showAuthModal();
-      });
-    }
-
-    if (btnOpenRegister) {
-      btnOpenRegister.addEventListener('click', () => {
-        if (btnTabRegister) btnTabRegister.click();
         this.ui.showAuthModal();
       });
     }

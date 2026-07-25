@@ -1,0 +1,84 @@
+{
+  "name": "twintube-desktop",
+  "version": "1.0.18",
+  "description": "TwinTube Windows desktop client",
+  "main": "main.js",
+  "author": "emireln",
+  "license": "GPL-3.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:dir": "electron-builder --win --dir --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "site.twintube.desktop",
+    "productName": "TwinTube",
+    "copyright": "Copyright © TwinTube",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "i18n.js",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/tray.ico",
+        "to": "tray.ico"
+      },
+      {
+        "from": "assets/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "TwinTube-Setup-${version}.${ext}",
+      "publish": [
+        {
+          "provider": "generic",
+          "url": "https://twintube.site/downloads"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TwinTube",
+      "installerIcon": "assets/tray.ico",
+      "uninstallerIcon": "assets/tray.ico",
+      "installerHeaderIcon": "assets/tray.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://twintube.site/downloads"
+      }
+    ]
+  }
+}

@@ -32,6 +32,7 @@
 - **Push-to-talk voice** — Optional WebRTC mesh (STUN + optional self-hosted coturn).
 - **Auth & guests** — JWT + bcrypt accounts, or join as guest; EN/PT UI.
 - **Mobile room UX** — Slim top bar, left drawer for room tools, bottom tabs for Chat / Queue / Viewers.
+- **Windows desktop app** — Electron wrapper around the live site with tray icon and automatic updates ([download](https://twintube.site/downloads/TwinTube-Setup.exe)).
 - **Buy Me a Coffee** — Landing footer button + room-header logo link to [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
 - **Docker ready** — Multi-stage image, Compose with PostgreSQL 16, production deploy helpers under `deploy/`.
 
@@ -46,6 +47,7 @@
 | **Database** | PostgreSQL (`lib/pq`) / SQLite (`modernc.org/sqlite`) |
 | **Auth** | JWT + bcrypt |
 | **Frontend** | HTML5, CSS3 (Material 3 tokens), ES6 modules |
+| **Desktop** | Electron + electron-builder (NSIS) + electron-updater |
 | **Voice** | Browser WebRTC + optional coturn |
 | **Containers** | Docker / Docker Compose |
 
@@ -59,6 +61,8 @@ twintube/
 ├── Dockerfile
 ├── docker-compose.yml      # App + PostgreSQL
 ├── .env.example
+├── desktop/                # Windows Electron client
+├── downloads/              # Installer artifacts on VPS (mounted into app)
 ├── deploy/                 # Production compose, Caddy/nginx, coturn profile
 ├── internal/
 │   ├── api/                # Rooms API, /api/rtc/config
@@ -70,6 +74,7 @@ twintube/
 └── static/
     ├── index.html          # Landing
     ├── room.html           # Watch room
+    ├── desktop-logo.png / tray.ico
     ├── bmc-button.png / bmc-logo.svg
     ├── gifs/               # Reaction assets
     ├── css/style.css
@@ -91,6 +96,17 @@ go run .
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
+
+### Windows desktop app
+
+```bash
+cd desktop
+npm ci
+npm start      # opens the live TwinTube site in a desktop shell
+npm run dist   # builds TwinTube-Setup-<version>.exe
+```
+
+Public download (after deploy): [https://twintube.site/downloads/TwinTube-Setup.exe](https://twintube.site/downloads/TwinTube-Setup.exe)
 
 ### Docker Compose (production-style)
 

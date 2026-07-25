@@ -46,16 +46,42 @@ export class VideoPlayer {
   initYouTubeAPI() {
     if (window.YT && window.YT.Player) {
       this.createYTPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = () => this.createYTPlayer();
+      return;
     }
+
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prev === 'function') {
+        try { prev(); } catch (_) { /* ignore */ }
+      }
+      this.createYTPlayer();
+    };
+
+    // If the ready callback already fired before we assigned it, poll briefly.
+    let tries = 0;
+    const poll = () => {
+      if (this.ytPlayer || this.isReady) return;
+      if (window.YT && window.YT.Player) {
+        this.createYTPlayer();
+        return;
+      }
+      if (tries++ < 40) setTimeout(poll, 100);
+    };
+    setTimeout(poll, 100);
   }
 
   createYTPlayer() {
+    if (this.ytPlayer || !this.ytContainer) return;
     try {
+      // Prefer measured wrapper size — % of a collapsed div yields a blank iframe.
+      const wrap = document.getElementById('playerWrapper');
+      const rect = wrap ? wrap.getBoundingClientRect() : null;
+      const width = Math.max(1, Math.round(rect?.width || this.ytContainer.clientWidth || 640));
+      const height = Math.max(1, Math.round(rect?.height || this.ytContainer.clientHeight || 360));
+
       this.ytPlayer = new window.YT.Player('ytPlayer', {
-        height: '100%',
-        width: '100%',
+        height: String(height),
+        width: String(width),
         videoId: this.currentVideoId,
         playerVars: {
           autoplay: 0,
@@ -68,7 +94,7 @@ export class VideoPlayer {
         events: {
           onReady: () => {
             this.isReady = true;
-            console.log('[PLAYER] YouTube iFrame API ready.');
+            this.refreshSize();
             if (this.pendingServerState) {
               const pending = this.pendingServerState;
               this.pendingServerState = null;
@@ -85,6 +111,54 @@ export class VideoPlayer {
     } catch (err) {
       console.warn('[PLAYER] Failed to instantiate YouTube player:', err);
     }
+  }
+
+  refreshSize() {
+    if (!this.ytPlayer || !this.isReady || typeof this.ytPlayer.setSize !== 'function') return;
+    const wrap = document.getElementById('playerWrapper');
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return;
+    try {
+      this.ytPlayer.setSize(Math.round(rect.width), Math.round(rect.height));
+    } catch (_) { /* ignore */ }
+  }
+
+  /** Destroy + rebuild iframe — used when a gated/hidden init left a blank surface. */
+  recreateYTPlayer(videoId = this.currentVideoId) {
+    const pending = this.pendingServerState;
+    if (this.ytPlayer) {
+      try {
+        if (typeof this.ytPlayer.destroy === 'function') this.ytPlayer.destroy();
+      } catch (_) { /* ignore */ }
+      this.ytPlayer = null;
+    }
+    this.isReady = false;
+
+    let host = document.getElementById('ytPlayer');
+    const wrap = document.getElementById('playerWrapper');
+    if (!host && wrap) {
+      host = document.createElement('div');
+      host.id = 'ytPlayer';
+      wrap.insertBefore(host, wrap.firstChild);
+    }
+    if (host) {
+      // YT may have replaced the node; ensure a clean empty div for the next Player().
+      if (host.tagName !== 'DIV') {
+        const fresh = document.createElement('div');
+        fresh.id = 'ytPlayer';
+        host.replaceWith(fresh);
+        host = fresh;
+      } else {
+        host.innerHTML = '';
+      }
+      host.style.display = 'block';
+      this.ytContainer = host;
+    }
+
+    if (videoId) this.currentVideoId = videoId;
+    this.pendingServerState = pending;
+    this.createYTPlayer();
   }
 
   initHTML5Player() {
@@ -366,17 +440,20 @@ export class VideoPlayer {
 
     if (platform === 'youtube' && this.ytPlayer && this.isReady) {
       const allowSeek = this.seekable;
+      const startSeconds = allowSeek ? Math.max(0, expectedTime) : 0;
+      this.refreshSize();
+
       if (needsLoad) {
-        this.ytPlayer.loadVideoById({
-          videoId,
-          startSeconds: allowSeek ? Math.max(0, expectedTime) : 0
-        });
-        if (status !== 'PLAYING') {
+        // cueVideoById shows the poster when paused; load+pause often stays black.
+        if (status === 'PLAYING') {
+          this.ytPlayer.loadVideoById({ videoId, startSeconds });
+        } else if (typeof this.ytPlayer.cueVideoById === 'function') {
+          this.ytPlayer.cueVideoById({ videoId, startSeconds });
+        } else {
+          this.ytPlayer.loadVideoById({ videoId, startSeconds });
           setTimeout(() => {
             this.markRemoteUpdate(800);
-            if (this.ytPlayer && this.ytPlayer.pauseVideo) {
-              this.ytPlayer.pauseVideo();
-            }
+            if (this.ytPlayer && this.ytPlayer.pauseVideo) this.ytPlayer.pauseVideo();
           }, 400);
         }
       } else {

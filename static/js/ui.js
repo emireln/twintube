@@ -273,8 +273,6 @@ export class UIManager {
   }
 
   updateUserNavUI(auth) {
-    const btnOpenAuthLogin = document.getElementById('btnOpenAuthLogin');
-    const btnOpenAuthRegister = document.getElementById('btnOpenAuthRegister');
     const btnOpenAuth = document.getElementById('btnOpenAuth');
     const userProfileMenu = document.getElementById('userProfileMenu');
     const userAvatarText = document.getElementById('userAvatarText');
@@ -284,8 +282,6 @@ export class UIManager {
 
     if (auth?.isLoggedIn()) {
       const user = auth.getUser();
-      if (btnOpenAuthLogin) btnOpenAuthLogin.style.display = 'none';
-      if (btnOpenAuthRegister) btnOpenAuthRegister.style.display = 'none';
       if (btnOpenAuth) btnOpenAuth.style.display = 'none';
       if (userProfileMenu) userProfileMenu.style.display = 'block';
       if (dropdownUsername) dropdownUsername.textContent = user.username;
@@ -303,8 +299,6 @@ export class UIManager {
         }
       }
     } else {
-      if (btnOpenAuthLogin) btnOpenAuthLogin.style.display = 'inline-flex';
-      if (btnOpenAuthRegister) btnOpenAuthRegister.style.display = 'inline-flex';
       if (btnOpenAuth) btnOpenAuth.style.display = 'inline-flex';
       if (userProfileMenu) userProfileMenu.style.display = 'none';
     }
