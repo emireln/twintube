@@ -179,18 +179,26 @@ jobs:
           PY
           ls -lah desktop-artifacts
 
-      # Upload straight to the VPS — avoids GitHub Actions artifact storage quota.
+      # Upload straight to the VPS via native OpenSSH — container actions
+      # (appleboy/scp-action) only run on Linux, and GitHub artifact storage is quota-limited.
       - name: Publish installer to VPS downloads
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          source: "desktop-artifacts/*"
-          target: "${{ secrets.VPS_APP_DIR }}/downloads"
-          strip_components: 1
-          overwrite: true
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -e
+          KEY_FILE="$RUNNER_TEMP/vps_key"
+          printf '%s\n' "$VPS_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          SSH_OPTS="-i $KEY_FILE -p ${VPS_SSH_PORT:-22} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_APP_DIR/downloads'"
+          scp -i "$KEY_FILE" -P "${VPS_SSH_PORT:-22}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            desktop-artifacts/* "$VPS_USER@$VPS_HOST:$VPS_APP_DIR/downloads/"
+          rm -f "$KEY_FILE"
 
       - name: Verify desktop downloads
         shell: bash
