@@ -14,7 +14,6 @@ services:
     environment:
       PORT: "8080"
       APP_DOMAIN: twintube.site
-      HOME_DOMAIN: home.twintube.site
     depends_on:
       postgres:
         condition: service_healthy

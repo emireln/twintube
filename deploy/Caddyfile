@@ -8,8 +8,7 @@ twintube.site, www.twintube.site {
 	reverse_proxy app:8080
 }
 
-# Marketing / home landing page (same app, host-based routing)
+# Redirect legacy marketing subdomain to main app
 home.twintube.site {
-	encode gzip
-	reverse_proxy app:8080
+	redir https://twintube.site{uri} permanent
 }

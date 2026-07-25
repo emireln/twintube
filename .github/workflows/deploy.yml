@@ -100,4 +100,3 @@ jobs:
       - name: Deployment summary
         run: |
           echo "Deployed TwinTube v$(cat VERSION) (${{ steps.meta.outputs.commit }}) to https://twintube.site"
-          echo "Home landing: https://home.twintube.site"

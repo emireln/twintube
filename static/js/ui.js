@@ -1,5 +1,17 @@
 import { getLanguage, getLanguageLabel, setLanguage, updateDOMTranslations, t } from './i18n.js';
 
+function queueThumbUrl(item) {
+  if (item.thumbnailUrl) return item.thumbnailUrl;
+  const id = item.videoId || '';
+  if (id.startsWith('local:') || id.startsWith('http://') || id.startsWith('https://')) {
+    return '/static/favicon.svg';
+  }
+  if (/^[a-zA-Z0-9_-]{11}$/.test(id)) {
+    return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  }
+  return '/static/favicon.svg';
+}
+
 export class UIManager {
   constructor() {
     this.toastContainer = document.getElementById('toastContainer');
@@ -212,6 +224,15 @@ export class UIManager {
     }
 
     updateDOMTranslations();
+
+    window.addEventListener('twintube:languagechange', () => {
+      const myRoomsModal = document.getElementById('myRoomsModal');
+      if (myRoomsModal?.classList.contains('active') && this.cachedRooms?.length) {
+        const query = document.getElementById('roomsSearchInput')?.value.trim().toLowerCase() || '';
+        if (query) this.filterModalRooms(query);
+        else this.displayModalRooms(this.cachedRooms);
+      }
+    });
   }
 
   populateSettingsForm(auth) {
@@ -347,7 +368,7 @@ export class UIManager {
       this.activeDeleteRoomHandler = deleteRoom;
       this.displayModalRooms(this.cachedRooms);
     } catch (err) {
-      list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">${this.escapeHTML(err.message || 'Failed to load rooms')}</div>`;
+      list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">${this.escapeHTML(err.message || t('failed_load_rooms'))}</div>`;
     }
   }
 
@@ -397,7 +418,7 @@ export class UIManager {
 
       card.innerHTML = `
         <div class="room-item-info">
-          <div class="room-item-title">${this.escapeHTML(room.name || ('Room ' + room.id))}</div>
+          <div class="room-item-title">${this.escapeHTML(room.name || t('room_label', { id: room.id }))}</div>
           <div class="room-item-meta">
             <code>${this.escapeHTML(room.id)}</code>
             <span>•</span>
@@ -407,9 +428,9 @@ export class UIManager {
           </div>
         </div>
         <div class="room-item-actions">
-          <button class="btn btn-secondary btn-copy" style="font-size: 11px; padding: 4px 10px;" title="Copy Link">${t('copy', 'Copy')}</button>
-          <button class="btn btn-primary btn-open" style="font-size: 11px; padding: 4px 10px;" title="Open Room">${t('open', 'Open')}</button>
-          <button class="btn btn-secondary btn-del" style="font-size: 11px; padding: 4px 10px; color: #e53935;" title="Delete Room">${t('delete', 'Delete')}</button>
+          <button class="btn btn-secondary btn-copy" style="font-size: 11px; padding: 4px 10px;" title="${t('copy_link_btn')}">${t('copy')}</button>
+          <button class="btn btn-primary btn-open" style="font-size: 11px; padding: 4px 10px;" title="${t('open_room_btn')}">${t('open')}</button>
+          <button class="btn btn-secondary btn-del" style="font-size: 11px; padding: 4px 10px; color: #e53935;" title="${t('delete_room_btn')}">${t('delete')}</button>
         </div>
       `;
 
@@ -580,16 +601,16 @@ export class UIManager {
       const el = document.createElement('div');
       el.className = 'queue-item';
       el.innerHTML = `
-        <img class="queue-thumb" src="${item.thumbnailUrl || 'https://img.youtube.com/vi/' + item.videoId + '/hqdefault.jpg'}" alt="Thumb">
+        <img class="queue-thumb" src="${queueThumbUrl(item)}" alt="Thumb">
         <div class="queue-details">
           <div class="queue-title">${this.escapeHTML(item.title)}</div>
-          <div class="queue-meta">Added by ${this.escapeHTML(item.addedBy)}</div>
+          <div class="queue-meta">${t('queue_added_by')} ${this.escapeHTML(item.addedBy)}</div>
         </div>
         <div class="queue-actions">
-          <button class="nav-icon-btn btn-play" title="Play Video" style="width:30px; height:30px;">
+          <button class="nav-icon-btn btn-play" title="${t('play_video')}" style="width:30px; height:30px;">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           </button>
-          <button class="nav-icon-btn btn-remove" title="Remove from Queue" style="width:30px; height:30px;">
+          <button class="nav-icon-btn btn-remove" title="${t('remove_from_queue')}" style="width:30px; height:30px;">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
@@ -603,10 +624,12 @@ export class UIManager {
   }
 
   // Audience Viewers Rendering
-  renderViewers(users, currentClientID, isHost, onTransferHost) {
+  renderViewers(users, currentClientID, isHost, onTransferHost, options = {}) {
     const container = document.getElementById('viewersList');
     const counter = document.getElementById('viewersCounter');
     if (!container) return;
+
+    const localVideoActive = !!options.localVideoActive;
 
     if (counter) counter.textContent = users.length;
     container.innerHTML = '';
@@ -617,18 +640,26 @@ export class UIManager {
       const isYou = user.id === currentClientID;
       const initial = (user.nickname || 'G').charAt(0).toUpperCase();
 
+      let localBadge = '';
+      if (localVideoActive) {
+        localBadge = user.localFileReady
+          ? `<span class="badge badge-file-ready" title="${t('local_ready_title')}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> ${t('local_ready_badge')}</span>`
+          : `<span class="badge badge-file-missing" title="${t('local_missing_title')}"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ${t('local_missing_badge')}</span>`;
+      }
+
       el.innerHTML = `
         <div class="viewer-info">
           <div class="msg-avatar">${initial}</div>
           <div>
             <span style="font-weight: 500; font-size: 14px;">${this.escapeHTML(user.nickname)}</span>
-            ${isYou ? '<span style="font-size: 11px; opacity: 0.7;"> (You)</span>' : ''}
+            ${isYou ? `<span style="font-size: 11px; opacity: 0.7;"> ${t('viewer_you')}</span>` : ''}
           </div>
         </div>
         <div style="display: flex; gap: 6px; align-items: center;">
-          ${user.isGuest ? '<span class="badge badge-guest" style="font-size: 10px; padding: 2px 6px;">Guest</span>' : ''}
-          ${user.isHost ? '<span class="badge badge-host"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg> Host</span>' : ''}
-          ${isHost && !user.isHost ? `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">Make Host</button>` : ''}
+          ${localBadge}
+          ${user.isGuest ? `<span class="badge badge-guest" style="font-size: 10px; padding: 2px 6px;">${t('guest_badge')}</span>` : ''}
+          ${user.isHost ? `<span class="badge badge-host"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg> ${t('host_badge')}</span>` : ''}
+          ${isHost && !user.isHost ? `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">${t('make_host')}</button>` : ''}
         </div>
       `;
 

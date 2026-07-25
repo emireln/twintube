@@ -168,7 +168,7 @@ func (d *DB) createTables() error {
 				is_private BOOLEAN DEFAULT FALSE,
 				password_hash TEXT DEFAULT '',
 				host_id VARCHAR(64) NOT NULL,
-				current_video_id VARCHAR(64) DEFAULT 'dQw4w9WgXcQ',
+				current_video_id TEXT DEFAULT 'dQw4w9WgXcQ',
 				current_status VARCHAR(32) DEFAULT 'PAUSED',
 				"current_time" DOUBLE PRECISION DEFAULT 0.0,
 				updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -188,7 +188,7 @@ func (d *DB) createTables() error {
 			`CREATE TABLE IF NOT EXISTS playlist_items (
 				id VARCHAR(64) PRIMARY KEY,
 				room_id VARCHAR(64) NOT NULL,
-				video_id VARCHAR(64) NOT NULL,
+				video_id TEXT NOT NULL,
 				title TEXT NOT NULL,
 				author VARCHAR(255) DEFAULT '',
 				thumbnail_url TEXT DEFAULT '',
@@ -273,6 +273,23 @@ func (d *DB) migrateRoomColumns() error {
 				continue
 			}
 			log.Printf("[DB] migrateRoomColumns note: %v", err)
+		}
+	}
+	return d.migrateVideoIDColumns()
+}
+
+// Widen video id columns so local:<hash> and direct URLs fit on Postgres.
+func (d *DB) migrateVideoIDColumns() error {
+	if d.dbType != DBTypePostgres {
+		return nil
+	}
+	alters := []string{
+		`ALTER TABLE rooms ALTER COLUMN current_video_id TYPE TEXT`,
+		`ALTER TABLE playlist_items ALTER COLUMN video_id TYPE TEXT`,
+	}
+	for _, q := range alters {
+		if _, err := d.db.Exec(q); err != nil {
+			log.Printf("[DB] migrateVideoIDColumns note: %v", err)
 		}
 	}
 	return nil

@@ -19,7 +19,12 @@
 
     <!-- Top Bar Video Link Search Form -->
     <form class="top-video-bar" id="topVideoForm">
-      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo or Twitch video URL..." required>
+      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL or add a local file..." required>
+      <button type="button" class="btn btn-secondary btn-nav" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add local video file">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span data-i18n="local_file">Local</span>
+      </button>
+      <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
       <button type="submit" class="btn btn-primary btn-nav" data-i18n-title="add_video" title="Add Video">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span data-i18n="add_video">Add</span>
@@ -34,7 +39,7 @@
       </button>
 
       <!-- New Room Button -->
-      <button class="btn btn-secondary btn-nav" id="btnNewRoom" title="Create New Room">
+      <button class="btn btn-secondary btn-nav" id="btnNewRoom" data-i18n-title="new_room_title" title="Create New Room">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         <span data-i18n="new_room">New Room</span>
       </button>
@@ -87,7 +92,29 @@
         <div id="ytPlayer"></div>
         <video id="html5Player" controls playsinline style="display: none; width: 100%; height: 100%; background: #000;"></video>
         <iframe id="genericPlayer" style="display: none; width: 100%; height: 100%; border: none;" allowfullscreen allow="autoplay"></iframe>
-        
+
+        <!-- Local File Sync Overlay (shown when this viewer hasn't loaded the local file) -->
+        <div class="local-file-overlay" id="localFileOverlay" hidden>
+          <div class="local-file-card">
+            <div class="local-file-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polygon points="10 11 15 14 10 17 10 11" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <h3 class="local-file-title" data-i18n="local_file_needed_title">Local video needed</h3>
+            <p class="local-file-name" id="localOverlayFileName"></p>
+            <ol class="local-file-steps">
+              <li data-i18n="local_step_1">Get the exact same video file from the person who shared it.</li>
+              <li data-i18n="local_step_2">Click the button below and select that file on your device.</li>
+              <li data-i18n="local_step_3">Playback syncs automatically once the file matches.</li>
+            </ol>
+            <button type="button" class="btn btn-primary local-file-btn" id="btnPickLocalOverlay">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span data-i18n="local_file_choose">Choose matching file</span>
+            </button>
+            <input type="file" id="localOverlayFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
+            <p class="local-file-privacy" data-i18n="local_file_privacy">Your video never leaves this device — TwinTube only syncs the playback position.</p>
+          </div>
+        </div>
+
         <!-- Floating Reactions Overlay -->
         <div class="reaction-overlay" id="reactionOverlay"></div>
       </div>
@@ -95,15 +122,15 @@
       <!-- Ambient Video Info Bar -->
       <div class="video-meta-card">
         <div class="video-info">
-          <h1 class="video-title" id="videoTitle">TwinTube Sync Room</h1>
+          <h1 class="video-title" id="videoTitle" data-i18n="sync_room_title">TwinTube Sync Room</h1>
           <div class="status-badges">
             <span class="badge badge-paused" id="statusBadge">
               <span class="badge-dot"></span>
-              <span id="statusText">PAUSED</span>
+              <span id="statusText" data-i18n="status_paused">PAUSED</span>
             </span>
             <span class="badge badge-host" id="hostBadge" style="display: none;">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
-              <span>Host</span>
+              <span data-i18n="host_badge">Host</span>
             </span>
           </div>
         </div>
@@ -126,13 +153,13 @@
           </div>
 
           <!-- Resync Button -->
-          <button class="btn btn-secondary btn-nav" id="btnResync" title="Force Sync to Server Position">
+          <button class="btn btn-secondary btn-nav" id="btnResync" data-i18n-title="resync_title" title="Force Sync to Server Position">
             <svg viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M160-160v-80h110l-16-14q-52-46-73-105t-21-119q0-111 66.5-197.5T400-790v84q-72 26-116 88.5T240-478q0 45 17 87.5t53 78.5l10 10v-98h80v240H160Zm400-10v-84q72-26 116-88.5T720-482q0-45-17-87.5T650-648l-10-10v98h-80v-240h240v80H690l16 14q49 49 71.5 106.5T800-482q0 111-66.5 197.5T560-170Z"/></svg>
-            <span>Resync</span>
+            <span data-i18n="resync">Resync</span>
           </button>
 
           <!-- Theater Mode Toggle Button -->
-          <button class="nav-icon-btn" id="btnTheaterMode" title="Toggle Theater Mode">
+          <button class="nav-icon-btn" id="btnTheaterMode" data-i18n-title="theater_mode" title="Toggle Theater Mode">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </button>
         </div>
@@ -145,16 +172,16 @@
       <nav class="tab-header">
         <button class="tab-btn active" data-tab="chatTab">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span>Chat</span>
+          <span data-i18n="chat_tab">Chat</span>
         </button>
         <button class="tab-btn" data-tab="queueTab">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          <span>Queue</span>
+          <span data-i18n="queue_tab">Queue</span>
           <span class="tab-counter" id="queueCounter">0</span>
         </button>
         <button class="tab-btn" data-tab="viewersTab">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Viewers</span>
+          <span data-i18n="viewers_tab">Viewers</span>
           <span class="tab-counter" id="viewersCounter">1</span>
         </button>
       </nav>
@@ -177,11 +204,11 @@
           </div>
 
           <form class="chat-input-bar" id="chatForm">
-            <button type="button" class="btn-chat-icon" id="btnEmojiPicker" title="Insert Emoji">
+            <button type="button" class="btn-chat-icon" id="btnEmojiPicker" data-i18n-title="insert_emoji" title="Insert Emoji">
               <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm263.5 221.5Q659-337 684-400H276q25 63 80.5 101.5T480-260q68 0 123.5-38.5Z"/></svg>
             </button>
-            <input type="text" id="chatInput" class="input-field" placeholder="Send a message..." autocomplete="off">
-            <button type="submit" class="btn btn-primary btn-chat-send" title="Send Message">
+            <input type="text" id="chatInput" class="input-field" data-i18n-ph="type_message" placeholder="Send a message..." autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-chat-send" data-i18n-title="send_message" title="Send Message">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </form>
@@ -224,42 +251,42 @@
   <div class="modal-overlay" id="authModal">
     <div class="modal-card">
       <nav class="tab-header" style="border-radius: var(--radius-sm); margin-bottom: 16px;">
-        <button class="tab-btn active" id="btnTabLogin">Sign In</button>
-        <button class="tab-btn" id="btnTabRegister">Create Account</button>
+        <button class="tab-btn active" id="btnTabLogin" data-i18n="login">Sign In</button>
+        <button class="tab-btn" id="btnTabRegister" data-i18n="register">Create Account</button>
       </nav>
 
       <!-- Login Form -->
       <form id="formLogin" class="modal-body">
         <div>
-          <label style="font-size: 12px; font-weight: 500;">Username or Email</label>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="username_or_email">Username or Email</label>
           <input type="text" id="loginUser" class="input-field" style="width: 100%; margin-top: 4px;" required>
         </div>
         <div>
-          <label style="font-size: 12px; font-weight: 500;">Password</label>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="password">Password</label>
           <input type="password" id="loginPass" class="input-field" style="width: 100%; margin-top: 4px;" required>
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Sign In</button>
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="login">Sign In</button>
       </form>
 
       <!-- Register Form -->
       <form id="formRegister" class="modal-body" style="display: none;">
         <div>
-          <label style="font-size: 12px; font-weight: 500;">Username</label>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="username">Username</label>
           <input type="text" id="regUser" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="3">
         </div>
         <div>
-          <label style="font-size: 12px; font-weight: 500;">Email</label>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="email">Email Address</label>
           <input type="email" id="regEmail" class="input-field" style="width: 100%; margin-top: 4px;" required>
         </div>
         <div>
-          <label style="font-size: 12px; font-weight: 500;">Password</label>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="password">Password</label>
           <input type="password" id="regPass" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="6">
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Create Account</button>
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="register">Create Account</button>
       </form>
 
       <div class="modal-footer" style="justify-content: center;">
-        <button class="btn btn-secondary" id="btnCloseAuth">Cancel</button>
+        <button class="btn btn-secondary" id="btnCloseAuth" data-i18n="cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -267,16 +294,16 @@
   <!-- Nickname Picker Modal (Guest Join) -->
   <div class="modal-overlay" id="nicknameModal">
     <div class="modal-card">
-      <h2 class="modal-title">Welcome to TwinTube</h2>
+      <h2 class="modal-title" data-i18n="welcome_title">Welcome to TwinTube</h2>
       <div class="modal-body">
-        <p style="font-size: 14px; color: var(--md-on-surface-variant);">
+        <p style="font-size: 14px; color: var(--md-on-surface-variant);" data-i18n="welcome_guest_desc">
           Join as a guest by entering a nickname, or sign in to save your identity:
         </p>
-        <input type="text" id="nicknameInput" class="input-field" placeholder="e.g. Alex" maxlength="20" autofocus required>
+        <input type="text" id="nicknameInput" class="input-field" data-i18n-ph="nickname_ph" placeholder="e.g. Alex" maxlength="20" autofocus required>
       </div>
       <div class="modal-footer" style="flex-direction: column; gap: 8px;">
-        <button class="btn btn-primary" id="btnSaveNickname" style="width: 100%;">Join as Guest</button>
-        <button class="btn btn-secondary" id="btnOpenAuthFromNick" style="width: 100%;">Sign In / Create Account</button>
+        <button class="btn btn-primary" id="btnSaveNickname" style="width: 100%;" data-i18n="join_as_guest">Join as Guest</button>
+        <button class="btn btn-secondary" id="btnOpenAuthFromNick" style="width: 100%;" data-i18n="sign_in_create">Sign In / Create Account</button>
       </div>
     </div>
   </div>
@@ -308,7 +335,7 @@
     <div class="modal-card modal-card-settings">
       <div class="settings-modal-header">
         <h2 data-i18n="settings_title">Settings</h2>
-        <button type="button" class="settings-close-btn" id="btnCloseSettings" aria-label="Close">
+        <button type="button" class="settings-close-btn" id="btnCloseSettings" data-i18n-aria="close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>

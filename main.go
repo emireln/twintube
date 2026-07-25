@@ -133,17 +133,12 @@ func allowedOrigins() []string {
 	if appDomain == "" {
 		appDomain = "twintube.site"
 	}
-	homeDomain := os.Getenv("HOME_DOMAIN")
-	if homeDomain == "" {
-		homeDomain = "home.twintube.site"
-	}
 	return []string{
 		"http://localhost:8080",
 		"http://127.0.0.1:8080",
 		"https://" + appDomain,
 		"https://www." + appDomain,
 		"http://" + appDomain,
-		"https://" + homeDomain,
 	}
 }
 
@@ -156,42 +151,8 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func isHomeDomain(host string) bool {
-	host = strings.ToLower(strings.Split(host, ":")[0])
-	homeDomain := os.Getenv("HOME_DOMAIN")
-	if homeDomain == "" {
-		homeDomain = "home.twintube.site"
-	}
-	return host == homeDomain
-}
-
 func serveLandingOrRoom(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
-
-	if isHomeDomain(r.Host) {
-		if path == "/" || path == "" {
-			http.ServeFile(w, r, filepath.Join(".", "static", "home", "index.html"))
-			return
-		}
-		if strings.HasPrefix(path, "/static/") {
-			http.ServeFile(w, r, filepath.Join(".", strings.TrimPrefix(path, "/")))
-			return
-		}
-		if strings.HasPrefix(path, "/room/") {
-			appDomain := os.Getenv("APP_DOMAIN")
-			if appDomain == "" {
-				appDomain = "twintube.site"
-			}
-			scheme := "https"
-			if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-				scheme = "http"
-			}
-			http.Redirect(w, r, scheme+"://"+appDomain+path, http.StatusTemporaryRedirect)
-			return
-		}
-		http.NotFound(w, r)
-		return
-	}
 
 	if path == "/" {
 		http.ServeFile(w, r, filepath.Join(".", "static", "index.html"))
@@ -457,7 +418,8 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 		var payload struct {
-			URL string `json:"url"`
+			URL   string `json:"url"`
+			Title string `json:"title"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return
@@ -470,11 +432,19 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
+		title := info.Title
+		if t := strings.TrimSpace(payload.Title); t != "" && (info.Platform == "local" || info.Platform == "direct") {
+			if len(t) > 200 {
+				t = t[:200]
+			}
+			title = t
+		}
+
 		item := db.PlaylistItem{
 			ID:           utils.GenerateRandomID(6),
 			RoomID:       c.RoomID,
 			VideoID:      info.VideoID,
-			Title:        info.Title,
+			Title:        title,
 			Author:       info.Author,
 			ThumbnailURL: info.ThumbnailURL,
 			AddedBy:      c.Nickname,
@@ -484,7 +454,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			_ = db.Database.SavePlaylistItem(item)
 		}
 
-		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s added '%s' to the queue.", c.Nickname, info.Title))
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s added '%s' to the queue.", c.Nickname, title))
 
 		raw, _ := json.Marshal(playlist)
 		c.Room.Broadcast <- room.WSMessage{
@@ -588,6 +558,23 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Action:  "VIDEO_REACTION",
 			Payload: raw,
 		}
+
+	case "LOCAL_FILE_STATUS":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			VideoID string `json:"videoId"`
+			Ready   bool   `json:"ready"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		payload.VideoID = strings.TrimSpace(payload.VideoID)
+		if payload.Ready && (!strings.HasPrefix(payload.VideoID, "local:") || len(payload.VideoID) > 128) {
+			return
+		}
+		c.Room.SetLocalFileReady(c, payload.VideoID, payload.Ready)
 
 	case "SYNC_REQUEST":
 		if c.Room == nil {

@@ -1,14 +1,14 @@
 # TwinTube VPS Deployment
 
-Deploy **twintube.site** (app) and **home.twintube.site** (marketing landing) with Docker + Caddy + GitHub Actions.
+Deploy **twintube.site** with Docker + Caddy + GitHub Actions.
 
 ## Architecture
 
 | Domain | Purpose |
 |--------|---------|
 | `twintube.site` | Full app (Go API + WebSocket + watch rooms) |
-| `home.twintube.site` | Marketing landing page |
 | `www.twintube.site` | App via Caddy |
+| `home.twintube.site` | Redirects to `twintube.site` (legacy subdomain) |
 
 Stack on VPS: **Caddy** (HTTPS) → **TwinTube** (Go) → **PostgreSQL 16**
 
@@ -22,7 +22,6 @@ Stack on VPS: **Caddy** (HTTPS) → **TwinTube** (Go) → **PostgreSQL 16**
 |------|------|-------|
 | A | `@` | `YOUR_VPS_IP` |
 | A | `www` | `YOUR_VPS_IP` |
-| A | `home` | `YOUR_VPS_IP` |
 
 ### 2. Install Docker
 

@@ -4,7 +4,8 @@ import { UIManager } from './ui.js';
 import { WSClient } from './ws.js';
 import { VideoPlayer } from './player.js';
 import { AuthManager } from './auth.js';
-import { t } from './i18n.js';
+import { t, translateError } from './i18n.js';
+import { getLocalBlobUrl, isLocalVideoId, registerLocalFileFromPicker, tryMatchLocalFile } from './localmedia.js';
 
 class TwinTubeApp {
   constructor() {
@@ -23,6 +24,12 @@ class TwinTubeApp {
     this.accessGranted = false;
     this.playlist = [];
     this.forceNextSync = false;
+    this.lastUsers = [];
+    this.lastVideoStatus = 'PAUSED';
+    this.lastVideoTitle = '';
+    this.pendingLocalMatchId = '';
+    this.currentLocalVideoId = '';
+    this.lastLocalStatusKey = '';
 
     document.body.classList.add('room-gated');
     this.init();
@@ -67,12 +74,22 @@ class TwinTubeApp {
     this.setupAuthUI();
     this.updateAuthNavUI();
 
+    window.addEventListener('twintube:languagechange', () => {
+      if (this.lastVideoTitle || this.lastVideoStatus) {
+        this.updateVideoMeta(this.lastVideoTitle, this.lastVideoStatus);
+      }
+      this.renderQueue();
+      if (this.lastUsers.length) {
+        this.renderViewersList();
+      }
+    });
+
     this.ui.initMyRoomsModal(
       async () => {
         const resp = await fetch('/api/rooms/mine', { headers: this.authHeaders() });
         if (!resp.ok) {
           const body = await resp.json();
-          throw new Error(body.error || 'Failed to load rooms');
+          throw new Error(body.error || t('failed_load_rooms'));
         }
         const data = await resp.json();
         return data.rooms || [];
@@ -83,7 +100,7 @@ class TwinTubeApp {
           headers: this.authHeaders()
         });
         const body = await del.json();
-        if (!del.ok) throw new Error(body.error || 'Delete failed');
+        if (!del.ok) throw new Error(body.error || t('failed_delete'));
       },
       () => {
         window.location.href = '/';
@@ -138,7 +155,7 @@ class TwinTubeApp {
             window.location.href = data.url;
           }
         } catch (err) {
-          this.ui.showToast(err.message || 'Failed to create new room');
+          this.ui.showToast(err.message || t('failed_new_room'));
         }
       });
     }
@@ -149,7 +166,7 @@ class TwinTubeApp {
       btnResync.addEventListener('click', () => {
         this.forceNextSync = true;
         this.ws.sendAction('SYNC_REQUEST');
-        this.ui.showToast('Resyncing video…');
+        this.ui.showToast(t('resyncing'));
       });
     }
 
@@ -160,7 +177,7 @@ class TwinTubeApp {
         document.body.classList.toggle('theater-mode');
         const isTheater = document.body.classList.contains('theater-mode');
         btnTheaterMode.classList.toggle('is-active', isTheater);
-        this.ui.showToast(isTheater ? 'Theater mode enabled' : 'Theater mode disabled');
+        this.ui.showToast(isTheater ? t('theater_mode_on') : t('theater_mode_off'));
       });
     }
 
@@ -187,13 +204,32 @@ class TwinTubeApp {
         if (url) {
           if (this.ws.sendAction('ADD_QUEUE', { url })) {
             topVideoInput.value = '';
-            this.ui.showToast('Adding video to queue…');
+            this.ui.showToast(t('adding_video'));
           } else {
-            this.ui.showToast('Not connected — try again in a moment.');
+            this.ui.showToast(t('not_connected'));
           }
         }
       });
     }
+
+    // Local file add (bytes stay on device; only a content id is shared for sync)
+    const btnAddLocal = document.getElementById('btnAddLocalVideo');
+    const localFileInput = document.getElementById('localVideoFileInput');
+    if (btnAddLocal && localFileInput) {
+      btnAddLocal.addEventListener('click', () => localFileInput.click());
+      localFileInput.addEventListener('change', async () => {
+        const file = localFileInput.files?.[0];
+        localFileInput.value = '';
+        if (!file) return;
+        if (!file.type.startsWith('video/') && !/\.(mp4|webm|ogg|mkv|mov)$/i.test(file.name)) {
+          this.ui.showToast(t('local_file_invalid'));
+          return;
+        }
+        await this.addLocalVideoFile(file);
+      });
+    }
+
+    this.setupLocalFileMatchModal();
 
     // Chat Form Submission
     const chatForm = document.getElementById('chatForm');
@@ -379,7 +415,116 @@ class TwinTubeApp {
           const nextItem = this.playlist[0];
           this.ws.sendAction('PLAY_QUEUE_ITEM', { itemId: nextItem.id });
         }
+      },
+      (videoId, title) => this.promptLocalFileMatch(videoId, title)
+    );
+  }
+
+  async addLocalVideoFile(file) {
+    this.ui.showToast(t('local_file_hashing'));
+    try {
+      const { videoId, entry } = await registerLocalFileFromPicker(file);
+      const title = entry?.title || file.name || t('local_video');
+      if (!this.ws.sendAction('ADD_QUEUE', { url: videoId, title })) {
+        this.ui.showToast(t('not_connected'));
+        return;
       }
+      this.ui.showToast(t('local_file_added'));
+    } catch (err) {
+      console.error('[APP] Local file add failed:', err);
+      this.ui.showToast(t('local_file_failed'));
+    }
+  }
+
+  setupLocalFileMatchModal() {
+    const input = document.getElementById('localOverlayFileInput');
+    const btnPick = document.getElementById('btnPickLocalOverlay');
+
+    if (btnPick && input) {
+      btnPick.addEventListener('click', () => input.click());
+    }
+
+    if (input) {
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file || !this.pendingLocalMatchId) return;
+        this.ui.showToast(t('local_file_hashing'));
+        try {
+          const result = await tryMatchLocalFile(this.pendingLocalMatchId, file);
+          if (!result.ok) {
+            this.ui.showToast(t('local_file_mismatch'));
+            return;
+          }
+          const matchedId = this.pendingLocalMatchId;
+          this.pendingLocalMatchId = '';
+          this.hideLocalFileOverlay();
+          this.ui.showToast(t('local_file_matched'));
+          this.sendLocalFileStatus(matchedId, true);
+          if (this.player) this.player.resumePendingLocalFile();
+        } catch (err) {
+          console.error('[APP] Local file match failed:', err);
+          this.ui.showToast(t('local_file_failed'));
+        }
+      });
+    }
+  }
+
+  promptLocalFileMatch(videoId, title) {
+    if (!isLocalVideoId(videoId)) return;
+    this.pendingLocalMatchId = videoId;
+    this.sendLocalFileStatus(videoId, false);
+    const nameEl = document.getElementById('localOverlayFileName');
+    if (nameEl) {
+      nameEl.textContent = title || '';
+      nameEl.hidden = !title;
+    }
+    const overlay = document.getElementById('localFileOverlay');
+    if (overlay) overlay.hidden = false;
+  }
+
+  hideLocalFileOverlay() {
+    const overlay = document.getElementById('localFileOverlay');
+    if (overlay) overlay.hidden = true;
+  }
+
+  // Report to the room whether this device has the current local file loaded.
+  sendLocalFileStatus(videoId, ready) {
+    const key = `${videoId}|${ready}`;
+    if (this.lastLocalStatusKey === key) return;
+    if (this.ws.sendAction('LOCAL_FILE_STATUS', { videoId, ready })) {
+      this.lastLocalStatusKey = key;
+    }
+  }
+
+  // Called on every INIT_STATE / STATE_UPDATE to keep overlay + readiness in sync.
+  syncLocalPresence(videoId) {
+    const isLocal = isLocalVideoId(videoId);
+    this.currentLocalVideoId = isLocal ? videoId : '';
+
+    if (!isLocal) {
+      this.pendingLocalMatchId = '';
+      this.hideLocalFileOverlay();
+      return;
+    }
+
+    if (getLocalBlobUrl(videoId)) {
+      this.pendingLocalMatchId = '';
+      this.hideLocalFileOverlay();
+      this.sendLocalFileStatus(videoId, true);
+    }
+    // Otherwise the player's onNeedLocalFile callback shows the overlay.
+  }
+
+  renderViewersList() {
+    this.ui.renderViewers(
+      this.lastUsers,
+      this.currentClientID,
+      this.isHost,
+      (targetId) => {
+        this.ws.sendAction('TRANSFER_HOST', { targetId });
+      },
+      { localVideoActive: !!this.currentLocalVideoId }
     );
   }
 
@@ -404,6 +549,7 @@ class TwinTubeApp {
 
       if (payload.video) {
         this.updateVideoMeta(payload.video.title, payload.video.status);
+        this.syncLocalPresence(payload.video.videoId || '');
         if (this.player) {
           this.player.applyServerState(
             payload.video,
@@ -414,13 +560,13 @@ class TwinTubeApp {
       }
 
       this.renderQueue();
-      this.ui.renderViewers(payload.users || [], this.currentClientID, this.isHost, (targetId) => {
-        this.ws.sendAction('TRANSFER_HOST', { targetId });
-      });
+      this.lastUsers = payload.users || [];
+      this.renderViewersList();
     });
 
     this.ws.on('STATE_UPDATE', (payload, timestamp) => {
       this.updateVideoMeta(payload.title, payload.status);
+      this.syncLocalPresence(payload.videoId || '');
       if (this.player) {
         const force = this.forceNextSync || !!payload.forceReload;
         this.forceNextSync = false;
@@ -448,9 +594,8 @@ class TwinTubeApp {
     });
 
     this.ws.on('USER_LIST', (users) => {
-      this.ui.renderViewers(users || [], this.currentClientID, this.isHost, (targetId) => {
-        this.ws.sendAction('TRANSFER_HOST', { targetId });
-      });
+      this.lastUsers = users || [];
+      this.renderViewersList();
     });
 
     this.ws.on('VIDEO_REACTION', (payload) => {
@@ -469,7 +614,7 @@ class TwinTubeApp {
           document.body.classList.add('room-gated');
 
           if (msg.includes('too many')) {
-            this.ui.showToast(payload.message);
+            this.ui.showToast(translateError(payload.message));
             setTimeout(() => { window.location.href = '/'; }, 1200);
             return;
           }
@@ -479,12 +624,12 @@ class TwinTubeApp {
         }
 
         if (msg.includes('not found')) {
-          this.ui.showToast(payload.message || t('room_not_found'));
+          this.ui.showToast(translateError(payload.message, 'room_not_found'));
           setTimeout(() => { window.location.href = '/'; }, 1200);
           return;
         }
 
-        this.ui.showToast(payload.message);
+        this.ui.showToast(translateError(payload.message));
         if (msg.includes('expired')) {
           sessionStorage.removeItem(this.joinTokenKey(this.roomId));
           setTimeout(() => { window.location.href = '/'; }, 1200);
@@ -507,7 +652,7 @@ class TwinTubeApp {
         data = null;
       }
       if (!resp.ok) {
-        return { error: data?.error || 'Room not found.', exists: false };
+        return { error: data?.error || 'room_not_found', exists: false };
       }
       return data;
     } catch {
@@ -532,7 +677,7 @@ class TwinTubeApp {
       data = {};
     }
     if (!resp.ok) {
-      throw new Error(data.error || 'Access denied');
+      throw new Error(data.error || t('access_denied'));
     }
     if (data.joinToken) {
       sessionStorage.setItem(this.joinTokenKey(roomId), data.joinToken);
@@ -543,13 +688,13 @@ class TwinTubeApp {
   async resolveRoomAccess() {
     const info = await this.fetchRoomInfo();
     if (!info) {
-      this.ui.showToast('Could not verify room access.');
+      this.ui.showToast(t('could_not_verify_access'));
       setTimeout(() => { window.location.href = '/'; }, 1200);
       return false;
     }
 
     if (info.error && !info.exists) {
-      this.ui.showToast(info.error || t('room_not_found'));
+      this.ui.showToast(translateError(info.error, 'room_not_found'));
       setTimeout(() => { window.location.href = '/'; }, 1200);
       return false;
     }
@@ -628,7 +773,7 @@ class TwinTubeApp {
       }
 
       if (label) {
-        label.textContent = `"${roomName}" is password-protected.`;
+        label.textContent = t('room_password_protected', { name: roomName });
       }
       input.value = '';
 
@@ -680,6 +825,9 @@ class TwinTubeApp {
   }
 
   joinRoom() {
+    // Fresh server-side client on (re)join — readiness must be re-announced.
+    this.lastLocalStatusKey = '';
+
     const payload = {
       roomId: this.roomId,
       nickname: this.nickname
@@ -711,18 +859,19 @@ class TwinTubeApp {
     const statusBadge = document.getElementById('statusBadge');
     const statusText = document.getElementById('statusText');
 
+    if (title) this.lastVideoTitle = title;
+    if (status) this.lastVideoStatus = status;
+
     if (videoTitle && title) {
       videoTitle.textContent = title;
+    } else if (videoTitle && !title && !this.lastVideoTitle) {
+      videoTitle.textContent = t('sync_room_title');
     }
 
     if (statusBadge && statusText) {
-      if (status === 'PLAYING') {
-        statusBadge.className = 'badge badge-playing';
-        statusText.textContent = 'PLAYING';
-      } else {
-        statusBadge.className = 'badge badge-paused';
-        statusText.textContent = 'PAUSED';
-      }
+      const playing = status === 'PLAYING';
+      statusBadge.className = playing ? 'badge badge-playing' : 'badge badge-paused';
+      statusText.textContent = playing ? t('status_playing') : t('status_paused');
     }
   }
 }

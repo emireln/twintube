@@ -128,8 +128,32 @@ func ExtractVideoInfo(input string) (*VideoInfo, error) {
 		}, nil
 	}
 
-	// 4. Direct Video URL (.mp4, .webm, .ogg, .m3u8)
+	// 4. Local file identity (client-only bytes; server stores hash for sync)
+	// Formats: local:<hex> | local://<hex>
 	lower := strings.ToLower(input)
+	if strings.HasPrefix(lower, "local://") || strings.HasPrefix(lower, "local:") {
+		id := strings.TrimSpace(input)
+		id = strings.TrimPrefix(id, "local://")
+		id = strings.TrimPrefix(id, "local:")
+		id = strings.TrimPrefix(id, "LOCAL://")
+		id = strings.TrimPrefix(id, "LOCAL:")
+		id = strings.ToLower(strings.TrimSpace(id))
+		reLocal := regexp.MustCompile(`^[a-f0-9]{16,64}$`)
+		if !reLocal.MatchString(id) {
+			return nil, fmt.Errorf("invalid local video id")
+		}
+		videoID := "local:" + id
+		return &VideoInfo{
+			Platform:     "local",
+			VideoID:      videoID,
+			EmbedURL:     videoID,
+			Title:        "Local video",
+			Author:       "Local file",
+			ThumbnailURL: "",
+		}, nil
+	}
+
+	// 5. Direct Video URL (.mp4, .webm, .ogg, .m3u8)
 	if strings.HasSuffix(lower, ".mp4") || strings.HasSuffix(lower, ".webm") || strings.HasSuffix(lower, ".ogg") || strings.HasSuffix(lower, ".m3u8") || strings.HasPrefix(lower, "http") {
 		parts := strings.Split(input, "/")
 		filename := parts[len(parts)-1]

@@ -2,7 +2,7 @@
 
 import { UIManager } from './ui.js';
 import { AuthManager } from './auth.js';
-import { t } from './i18n.js';
+import { t, translateError } from './i18n.js';
 
 class LandingApp {
   constructor() {
@@ -36,7 +36,7 @@ class LandingApp {
         const resp = await fetch('/api/rooms/mine', { headers: this.authHeaders() });
         if (!resp.ok) {
           const body = await resp.json();
-          throw new Error(body.error || 'Failed to load rooms');
+          throw new Error(body.error || t('failed_load_rooms'));
         }
         const data = await resp.json();
         return data.rooms || [];
@@ -47,7 +47,7 @@ class LandingApp {
           headers: this.authHeaders()
         });
         const body = await del.json();
-        if (!del.ok) throw new Error(body.error || 'Delete failed');
+        if (!del.ok) throw new Error(body.error || t('failed_delete'));
       },
       () => this.openCreateRoomModal()
     );
@@ -73,7 +73,7 @@ class LandingApp {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      throw new Error(data.error || 'Access denied');
+      throw new Error(data.error || t('access_denied'));
     }
     if (data.joinToken) {
       sessionStorage.setItem(this.joinTokenKey(roomId), data.joinToken);
@@ -89,7 +89,7 @@ class LandingApp {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      throw new Error(data.error || 'Failed to create room');
+      throw new Error(data.error || t('failed_create_room'));
     }
     if (password && data.roomCode) {
       await this.requestRoomAccess(data.roomCode, password);
@@ -116,7 +116,7 @@ class LandingApp {
         try {
           await this.createRoomRequest({});
         } catch (err) {
-          this.ui.showToast(err.message || 'Failed to create room.');
+          this.ui.showToast(err.message || t('failed_create_room'));
           btnCreate.disabled = false;
         }
       });
@@ -136,7 +136,7 @@ class LandingApp {
         try {
           await this.createRoomRequest({ name, password });
         } catch (err) {
-          this.ui.showToast(err.message || 'Failed to create room.');
+          this.ui.showToast(err.message || t('failed_create_room'));
           if (btn) btn.disabled = false;
         }
       });
@@ -175,7 +175,7 @@ class LandingApp {
           }
 
           if (!resp.ok) {
-            this.ui.showToast(info.error || t('room_not_found'));
+            this.ui.showToast(translateError(info.error, 'room_not_found'));
             return;
           }
 
@@ -196,10 +196,10 @@ class LandingApp {
 
           this.pendingJoinCode = code;
           const label = document.getElementById('joinPasswordRoomName');
-          if (label) label.textContent = `"${info.name || code}" is password-protected.`;
+          if (label) label.textContent = t('room_password_protected', { name: info.name || code });
           this.ui.showModal('joinPasswordModal');
         } catch (err) {
-          this.ui.showToast(t('room_not_found'));
+          this.ui.showToast(err.message ? translateError(err.message, 'room_not_found') : t('room_not_found'));
         }
       });
     }

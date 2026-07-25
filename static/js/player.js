@@ -1,7 +1,9 @@
 /* TwinTube - Universal Video Player Controller & Sync Engine */
 
+import { getLocalBlobUrl, isLocalVideoId } from './localmedia.js';
+
 export class VideoPlayer {
-  constructor(onLocalStateChange, onVideoEnded) {
+  constructor(onLocalStateChange, onVideoEnded, onNeedLocalFile = null) {
     this.ytPlayer = null;
     this.html5Player = document.getElementById('html5Player');
     this.genericPlayer = document.getElementById('genericPlayer');
@@ -12,11 +14,13 @@ export class VideoPlayer {
     this.currentStatus = 'PAUSED';
     this.onLocalStateChange = onLocalStateChange;
     this.onVideoEnded = onVideoEnded;
+    this.onNeedLocalFile = onNeedLocalFile;
     this.isRemoteUpdate = false;
     this.isReady = false;
     this.syncThreshold = 1.5; // Drift tolerance in seconds
     this.pendingServerState = null;
     this.remoteUpdateTimer = null;
+    this.pendingLocalState = null;
 
     this.initYouTubeAPI();
     this.initHTML5Player();
@@ -135,12 +139,28 @@ export class VideoPlayer {
   }
 
   detectPlatform(videoId) {
+    if (isLocalVideoId(videoId)) return 'direct';
     if (videoId.startsWith('http://') || videoId.startsWith('https://') || videoId.endsWith('.mp4') || videoId.endsWith('.webm')) {
       if (videoId.includes('vimeo.com')) return 'vimeo';
       if (videoId.includes('twitch.tv')) return 'twitch';
       return 'direct';
     }
     return 'youtube';
+  }
+
+  resolveDirectSrc(videoId) {
+    if (isLocalVideoId(videoId)) {
+      return getLocalBlobUrl(videoId);
+    }
+    return videoId;
+  }
+
+  /** Called after a peer selects the matching local file. */
+  resumePendingLocalFile() {
+    if (!this.pendingLocalState) return;
+    const pending = this.pendingLocalState;
+    this.pendingLocalState = null;
+    this.applyServerState(pending.videoState, pending.serverTimestamp, pending.options);
   }
 
   getLoadedVideoId() {
@@ -177,6 +197,21 @@ export class VideoPlayer {
         serverTimestamp: stamp,
         options: { force: true, timeAlreadyAbsolute: true }
       };
+      return;
+    }
+
+    if (isLocalVideoId(videoId) && !getLocalBlobUrl(videoId)) {
+      this.pendingLocalState = {
+        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp },
+        serverTimestamp: stamp,
+        options: { force: true, timeAlreadyAbsolute: true }
+      };
+      this.switchPlatform('direct');
+      this.currentVideoId = videoId;
+      this.currentStatus = status;
+      if (typeof this.onNeedLocalFile === 'function') {
+        this.onNeedLocalFile(videoId, videoState.title || '');
+      }
       return;
     }
 
@@ -226,8 +261,11 @@ export class VideoPlayer {
         }
       }
     } else if (platform === 'direct' && this.html5Player) {
-      if (this.html5Player.src !== videoId) {
-        this.html5Player.src = videoId;
+      const src = this.resolveDirectSrc(videoId);
+      if (!src) return;
+
+      if (this.html5Player.src !== src) {
+        this.html5Player.src = src;
       }
 
       const drift = Math.abs(this.html5Player.currentTime - expectedTime);

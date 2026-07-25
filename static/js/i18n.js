@@ -7,7 +7,7 @@ const translations = {
     hero_badge: "Real-Time Synchronized Playback",
     hero_title_1: "Watch Videos Together,",
     hero_title_2: "In Perfect Sync.",
-    hero_subtitle: "Create instant watch rooms for YouTube, Vimeo, Twitch, and direct video links with zero latency, live chat, and collaborative playlists.",
+    hero_subtitle: "Create instant watch rooms for YouTube, Vimeo, Twitch, direct links, and local files — with live sync, chat, and collaborative playlists. Local videos stay on your devices.",
     or_divider: "OR",
     bmc_banner: "Enjoying TwinTube? Support the creator on Buy Me a Coffee",
     log_in: "Log In",
@@ -48,8 +48,29 @@ const translations = {
     room_locked: "This room is locked.",
     room_password: "Room password",
     enter_room: "Enter Room",
-    paste_video_placeholder: "Paste YouTube, Vimeo or Twitch video URL...",
+    paste_video_placeholder: "Paste YouTube, Vimeo, Twitch URL…",
     add_video: "Add",
+    add_local_video: "Add a local video file (stays on your device)",
+    local_file: "Local",
+    local_video: "Local video",
+    local_file_hashing: "Preparing local file for sync…",
+    local_file_added: "Local video added to the queue",
+    local_file_failed: "Could not prepare that local file",
+    local_file_invalid: "Please choose a video file",
+    local_file_needed_title: "Local video needed",
+    local_file_match_desc: "Someone in this room is watching a local file. Pick the same file on your device to sync — TwinTube never uploads or stores the video.",
+    local_file_match_named: "Select \"{name}\" on your device to join sync. The file never leaves your computer.",
+    local_file_choose: "Choose matching file",
+    local_file_matched: "File matched — syncing playback",
+    local_file_mismatch: "That file doesn't match. Choose the same video everyone else is using.",
+    local_file_privacy: "Your video never leaves this device — TwinTube only syncs the playback position.",
+    local_step_1: "Get the exact same video file from the person who shared it.",
+    local_step_2: "Click the button below and select that file on your device.",
+    local_step_3: "Playback syncs automatically once the file matches.",
+    local_ready_badge: "File ready",
+    local_missing_badge: "Missing file",
+    local_ready_title: "This viewer has the local video loaded",
+    local_missing_title: "This viewer hasn't selected the local video yet",
     resync: "Resync",
     theater_mode: "Theater Mode",
     copy_link_title: "Click to Copy Room Link",
@@ -102,11 +123,49 @@ const translations = {
     signed_out: "Signed out.",
     account_created: "Account created successfully!",
     room_expired: "This room has expired.",
-    room_not_found: "Room not found. Check the code or create a new room.",
+    room_not_found: "We couldn't find that room. Check the code and try again, or create a new one.",
     invalid_room_code: "Invalid room code format.",
     login_failed: "Login failed",
     register_failed: "Registration failed",
-    password_mismatch: "Passwords do not match"
+    password_mismatch: "Passwords do not match",
+    sync_room_title: "TwinTube Sync Room",
+    status_playing: "PLAYING",
+    status_paused: "PAUSED",
+    host_badge: "Host",
+    resyncing: "Resyncing video…",
+    theater_mode_on: "Theater mode enabled",
+    theater_mode_off: "Theater mode disabled",
+    adding_video: "Adding video to queue…",
+    not_connected: "Not connected — try again in a moment.",
+    could_not_verify_access: "Could not verify room access.",
+    access_denied: "Access denied",
+    room_password_protected: "\"{name}\" is password-protected.",
+    welcome_title: "Welcome to TwinTube",
+    welcome_guest_desc: "Join as a guest by entering a nickname, or sign in to save your identity:",
+    nickname_ph: "e.g. Alex",
+    join_as_guest: "Join as Guest",
+    sign_in_create: "Sign In / Create Account",
+    insert_emoji: "Insert Emoji",
+    send_message: "Send Message",
+    failed_load_rooms: "Failed to load rooms",
+    failed_create_room: "Failed to create room",
+    failed_new_room: "Failed to create new room",
+    failed_delete: "Delete failed",
+    queue_added_by: "Added by",
+    play_video: "Play Video",
+    remove_from_queue: "Remove from Queue",
+    make_host: "Make Host",
+    viewer_you: "(You)",
+    guest_badge: "Guest",
+    copy_link_btn: "Copy Link",
+    open_room_btn: "Open Room",
+    delete_room_btn: "Delete Room",
+    resync_title: "Force Sync to Server Position",
+    new_room_title: "Create New Room",
+    page_title_landing: "TwinTube - Synchronized Video Watching Platform",
+    page_title_room: "TwinTube - Watch Room",
+    room_label: "Room {id}",
+    too_many_attempts: "Too many failed attempts. Please wait a few minutes and try again."
   },
   pt: {
     app_title: "TwinTube",
@@ -114,7 +173,7 @@ const translations = {
     hero_badge: "Reprodução Sincronizada em Tempo Real",
     hero_title_1: "Assista vídeos juntos,",
     hero_title_2: "em perfeita sincronia.",
-    hero_subtitle: "Crie salas instantâneas para YouTube, Vimeo, Twitch e links diretos com baixa latência, chat ao vivo e playlists colaborativas.",
+    hero_subtitle: "Crie salas instantâneas para YouTube, Vimeo, Twitch, links diretos e arquivos locais — com sincronia ao vivo, chat e playlists colaborativas. Vídeos locais ficam nos seus dispositivos.",
     or_divider: "OU",
     bmc_banner: "Gostando do TwinTube? Apoie o criador no Buy Me a Coffee",
     log_in: "Entrar",
@@ -155,8 +214,29 @@ const translations = {
     room_locked: "Esta sala está protegida.",
     room_password: "Senha da sala",
     enter_room: "Entrar na Sala",
-    paste_video_placeholder: "Cole o link de vídeos do YouTube, Vimeo ou Twitch...",
+    paste_video_placeholder: "Cole URL do YouTube, Vimeo ou Twitch…",
     add_video: "Adicionar",
+    add_local_video: "Adicionar arquivo de vídeo local (fica no seu dispositivo)",
+    local_file: "Local",
+    local_video: "Vídeo local",
+    local_file_hashing: "Preparando arquivo local para sincronizar…",
+    local_file_added: "Vídeo local adicionado à fila",
+    local_file_failed: "Não foi possível preparar esse arquivo local",
+    local_file_invalid: "Escolha um arquivo de vídeo",
+    local_file_needed_title: "Vídeo local necessário",
+    local_file_match_desc: "Alguém nesta sala está assistindo um arquivo local. Escolha o mesmo arquivo no seu dispositivo para sincronizar — o TwinTube nunca envia nem armazena o vídeo.",
+    local_file_match_named: "Selecione \"{name}\" no seu dispositivo para entrar na sincronia. O arquivo não sai do seu computador.",
+    local_file_choose: "Escolher arquivo correspondente",
+    local_file_matched: "Arquivo correspondente — sincronizando a reprodução",
+    local_file_mismatch: "Esse arquivo não corresponde. Escolha o mesmo vídeo que os outros estão usando.",
+    local_file_privacy: "Seu vídeo nunca sai deste dispositivo — o TwinTube sincroniza apenas a posição da reprodução.",
+    local_step_1: "Obtenha exatamente o mesmo arquivo de vídeo com quem o compartilhou.",
+    local_step_2: "Clique no botão abaixo e selecione esse arquivo no seu dispositivo.",
+    local_step_3: "A reprodução sincroniza automaticamente quando o arquivo corresponder.",
+    local_ready_badge: "Arquivo pronto",
+    local_missing_badge: "Sem o arquivo",
+    local_ready_title: "Este espectador já carregou o vídeo local",
+    local_missing_title: "Este espectador ainda não selecionou o vídeo local",
     resync: "Resincronizar",
     theater_mode: "Modo Cinema",
     copy_link_title: "Clique para copiar o link da sala",
@@ -209,11 +289,49 @@ const translations = {
     signed_out: "Você saiu da conta.",
     account_created: "Conta criada com sucesso!",
     room_expired: "Esta sala expirou.",
-    room_not_found: "Sala não encontrada. Verifique o código ou crie uma nova sala.",
+    room_not_found: "Não encontramos essa sala. Confira o código e tente de novo, ou crie uma nova sala.",
     invalid_room_code: "Formato de código de sala inválido.",
     login_failed: "Falha no login",
     register_failed: "Falha no cadastro",
-    password_mismatch: "As senhas não coincidem"
+    password_mismatch: "As senhas não coincidem",
+    sync_room_title: "Sala TwinTube",
+    status_playing: "REPRODUZINDO",
+    status_paused: "PAUSADO",
+    host_badge: "Anfitrião",
+    resyncing: "Ressincronizando vídeo…",
+    theater_mode_on: "Modo cinema ativado",
+    theater_mode_off: "Modo cinema desativado",
+    adding_video: "Adicionando vídeo à fila…",
+    not_connected: "Sem conexão — tente novamente em instantes.",
+    could_not_verify_access: "Não foi possível verificar o acesso à sala.",
+    access_denied: "Acesso negado",
+    room_password_protected: "\"{name}\" está protegida por senha.",
+    welcome_title: "Bem-vindo ao TwinTube",
+    welcome_guest_desc: "Entre como convidado com um apelido ou faça login para salvar sua identidade:",
+    nickname_ph: "ex.: Alex",
+    join_as_guest: "Entrar como Convidado",
+    sign_in_create: "Entrar / Criar Conta",
+    insert_emoji: "Inserir Emoji",
+    send_message: "Enviar Mensagem",
+    failed_load_rooms: "Falha ao carregar salas",
+    failed_create_room: "Falha ao criar sala",
+    failed_new_room: "Falha ao criar nova sala",
+    failed_delete: "Falha ao excluir",
+    queue_added_by: "Adicionado por",
+    play_video: "Reproduzir Vídeo",
+    remove_from_queue: "Remover da Fila",
+    make_host: "Tornar Anfitrião",
+    viewer_you: "(Você)",
+    guest_badge: "Convidado",
+    copy_link_btn: "Copiar Link",
+    open_room_btn: "Abrir Sala",
+    delete_room_btn: "Excluir Sala",
+    resync_title: "Forçar Sincronização com o Servidor",
+    new_room_title: "Criar Nova Sala",
+    page_title_landing: "TwinTube - Plataforma de Vídeo Sincronizado",
+    page_title_room: "TwinTube - Sala de Exibição",
+    room_label: "Sala {id}",
+    too_many_attempts: "Muitas tentativas falhas. Aguarde alguns minutos e tente novamente."
   }
 };
 
@@ -254,9 +372,51 @@ export function setLanguage(lang) {
   window.dispatchEvent(new CustomEvent('twintube:languagechange', { detail: { lang } }));
 }
 
-export function t(key, fallback = '') {
+export function t(key, fallbackOrVars = '') {
   const dict = translations[currentLang] || translations.en;
-  return dict[key] || translations.en[key] || fallback || key;
+  let fallback = '';
+  let vars = null;
+  if (fallbackOrVars && typeof fallbackOrVars === 'object') {
+    vars = fallbackOrVars;
+  } else {
+    fallback = fallbackOrVars;
+  }
+  let str = dict[key] || translations.en[key] || fallback || key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      str = String(str).replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+    }
+  }
+  return str;
+}
+
+const serverErrorToKey = {
+  room_not_found: 'room_not_found',
+  'Room not found.': 'room_not_found',
+  'Room not found': 'room_not_found',
+  'This room has expired.': 'room_expired',
+  'Incorrect room password.': 'password_required',
+  'Invalid room code': 'invalid_room_code',
+  'Invalid room ID.': 'invalid_room_code',
+  'Room code required': 'invalid_room_code',
+  'Access denied': 'access_denied',
+  'Room access denied. Verify the password first.': 'password_required',
+  'Too many failed password attempts. Try again later.': 'too_many_attempts'
+};
+
+export function translateError(message, fallbackKey = 'room_not_found') {
+  if (message == null || message === '') return t(fallbackKey);
+  const msg = String(message).trim();
+  if (translations.en[msg]) return t(msg);
+  const mapped = serverErrorToKey[msg];
+  if (mapped) return t(mapped);
+  const lower = msg.toLowerCase();
+  if (lower.includes('not found')) return t('room_not_found');
+  if (lower.includes('expired')) return t('room_expired');
+  if (lower.includes('invalid room') || lower.includes('room code')) return t('invalid_room_code');
+  if (lower.includes('too many')) return t('too_many_attempts');
+  if (lower.includes('password') || lower.includes('access denied')) return t('password_required');
+  return msg;
 }
 
 export function updateDOMTranslations() {
@@ -277,10 +437,21 @@ export function updateDOMTranslations() {
     if (key) el.setAttribute('title', t(key));
   });
 
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    const key = el.getAttribute('data-i18n-aria');
+    if (key) el.setAttribute('aria-label', t(key));
+  });
+
   const settingsLangLabel = document.getElementById('settingsLangPickerLabel');
   if (settingsLangLabel) settingsLangLabel.textContent = getLanguageLabel();
 
   document.querySelectorAll('#settingsLangPickerMenu .lang-picker-option').forEach(btn => {
     btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
   });
+
+  if (document.body.classList.contains('room-body')) {
+    document.title = t('page_title_room');
+  } else if (document.body.classList.contains('landing-body')) {
+    document.title = t('page_title_landing');
+  }
 }

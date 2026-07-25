@@ -19,12 +19,13 @@ type VideoState struct {
 }
 
 type UserSummary struct {
-	ID        string `json:"id"`
-	UserID    string `json:"userId,omitempty"`
-	Nickname  string `json:"nickname"`
-	IsHost    bool   `json:"isHost"`
-	IsGuest   bool   `json:"isGuest"`
-	AvatarURL string `json:"avatarUrl,omitempty"`
+	ID             string `json:"id"`
+	UserID         string `json:"userId,omitempty"`
+	Nickname       string `json:"nickname"`
+	IsHost         bool   `json:"isHost"`
+	IsGuest        bool   `json:"isGuest"`
+	AvatarURL      string `json:"avatarUrl,omitempty"`
+	LocalFileReady bool   `json:"localFileReady"`
 }
 
 type WSMessage struct {
@@ -45,6 +46,10 @@ type Client struct {
 	Conn      *websocket.Conn
 	Send      chan WSMessage
 	Room      *Room
+	// LocalReadyID is the local:<hash> video ID this client has loaded on
+	// their device. Compared against Room.State.VideoID when building the
+	// user list so readiness resets automatically when the video changes.
+	LocalReadyID string
 }
 
 type Room struct {
@@ -414,15 +419,29 @@ func (r *Room) getUserListUnsafe() []UserSummary {
 	list := make([]UserSummary, 0, len(r.Clients))
 	for _, c := range r.Clients {
 		list = append(list, UserSummary{
-			ID:        c.ID,
-			UserID:    c.UserID,
-			Nickname:  c.Nickname,
-			IsHost:    c.IsHost,
-			IsGuest:   c.IsGuest,
-			AvatarURL: c.AvatarURL,
+			ID:             c.ID,
+			UserID:         c.UserID,
+			Nickname:       c.Nickname,
+			IsHost:         c.IsHost,
+			IsGuest:        c.IsGuest,
+			AvatarURL:      c.AvatarURL,
+			LocalFileReady: c.LocalReadyID != "" && c.LocalReadyID == r.State.VideoID,
 		})
 	}
 	return list
+}
+
+// SetLocalFileReady records whether a client has the given local video file
+// loaded on their device, then broadcasts the updated user list.
+func (r *Room) SetLocalFileReady(client *Client, videoID string, ready bool) {
+	r.mu.Lock()
+	if ready {
+		client.LocalReadyID = videoID
+	} else if videoID == "" || client.LocalReadyID == videoID {
+		client.LocalReadyID = ""
+	}
+	r.mu.Unlock()
+	r.BroadcastUserList()
 }
 
 func (r *Room) BroadcastSystemAlert(content string) {
