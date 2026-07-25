@@ -729,6 +729,7 @@ export class UIManager {
           ${user.isGuest ? `<span class="badge badge-guest" style="font-size: 10px; padding: 2px 6px;">${t('guest_badge')}</span>` : ''}
           ${user.isHost ? `<span class="badge badge-host"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg> ${t('host_badge')}</span>` : ''}
           ${user.isCohost && !user.isHost ? `<span class="badge badge-cohost">${t('cohost_badge')}</span>` : ''}
+          ${user.voiceJoined ? `<span class="badge badge-voice ${user.voiceSpeaking ? 'is-speaking' : ''}" title="${t('voice_connected')}">${user.voiceSpeaking ? t('voice_speaking') : (user.voiceMuted ? t('voice_muted') : t('voice_connected'))}</span>` : ''}
           ${roleActions}
         </div>
       `;

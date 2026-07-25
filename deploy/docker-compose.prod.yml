@@ -42,6 +42,30 @@ services:
     networks:
       - twintube_net
 
+  # Optional: enable for push-to-talk voice. Open UDP/TCP 3478 and UDP 49152-49200.
+  coturn:
+    image: coturn/coturn:4.6.2
+    container_name: twintube_coturn
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DETECT_EXTERNAL_IP: "yes"
+    command:
+      - "-n"
+      - "--log-file=stdout"
+      - "--listening-port=3478"
+      - "--fingerprint"
+      - "--lt-cred-mech"
+      - "--use-auth-secret"
+      - "--static-auth-secret=${TURN_SECRET}"
+      - "--realm=${TURN_REALM:-twintube}"
+      - "--no-multicast-peers"
+      - "--no-cli"
+      - "--min-port=49152"
+      - "--max-port=49200"
+    profiles:
+      - voice
+
 networks:
   twintube_net:
     driver: bridge

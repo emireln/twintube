@@ -270,13 +270,50 @@ func (r *Room) SendCorrectiveState(client *Client) {
 func (r *Room) roomMetaForClient(client *Client) map[string]interface{} {
 	votes, needed, voted := r.skipTallyLocked()
 	return map[string]interface{}{
-		"queueLocked":         r.QueueLocked,
-		"skipVotes":           votes,
-		"skipNeeded":          needed,
-		"hasSkipVoted":        voted[client.ID],
-		"isCohost":            client.IsCohost,
-		"canControlPlayback":  client.CanControlPlayback(),
-		"canModerateQueue":    client.CanModerateQueue(),
-		"role":                client.RoleName(),
+		"queueLocked":        r.QueueLocked,
+		"skipVotes":          votes,
+		"skipNeeded":         needed,
+		"hasSkipVoted":       voted[client.ID],
+		"isCohost":           client.IsCohost,
+		"canControlPlayback": client.CanControlPlayback(),
+		"canModerateQueue":   client.CanModerateQueue(),
+		"role":               client.RoleName(),
 	}
+}
+
+func (r *Room) SetVoiceJoined(client *Client, joined bool) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if client == nil {
+		return false
+	}
+	if joined {
+		count := 0
+		for _, c := range r.Clients {
+			if c.VoiceJoined {
+				count++
+			}
+		}
+		if !client.VoiceJoined && count >= 6 {
+			return false
+		}
+		client.VoiceJoined = true
+		client.VoiceMuted = true
+		client.VoiceSpeaking = false
+	} else {
+		client.VoiceJoined = false
+		client.VoiceMuted = true
+		client.VoiceSpeaking = false
+	}
+	return true
+}
+
+func (r *Room) SetVoiceStatus(client *Client, muted, speaking bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if client == nil || !client.VoiceJoined {
+		return
+	}
+	client.VoiceMuted = muted
+	client.VoiceSpeaking = speaking && !muted
 }

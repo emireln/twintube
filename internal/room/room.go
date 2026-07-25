@@ -33,6 +33,9 @@ type UserSummary struct {
 	AvatarURL      string `json:"avatarUrl,omitempty"`
 	LocalFileReady bool   `json:"localFileReady"`
 	Role           string `json:"role"`
+	VoiceJoined    bool   `json:"voiceJoined"`
+	VoiceMuted     bool   `json:"voiceMuted"`
+	VoiceSpeaking  bool   `json:"voiceSpeaking"`
 }
 
 type WSMessage struct {
@@ -52,6 +55,9 @@ type Client struct {
 	AvatarURL string
 	RemoteIP  string
 	JoinedAt  time.Time
+	VoiceJoined   bool
+	VoiceMuted    bool
+	VoiceSpeaking bool
 	Conn      *websocket.Conn
 	Send      chan WSMessage
 	Room      *Room
@@ -332,6 +338,9 @@ func (r *Room) Run() {
 				if r.SkipVotes != nil {
 					delete(r.SkipVotes, client.ID)
 				}
+				client.VoiceJoined = false
+				client.VoiceSpeaking = false
+				client.VoiceMuted = true
 
 				log.Printf("[ROOM %s] Client left: %s", r.ID, client.Nickname)
 
@@ -519,6 +528,9 @@ func (r *Room) getUserListUnsafe() []UserSummary {
 			AvatarURL:      c.AvatarURL,
 			LocalFileReady: c.LocalReadyID != "" && c.LocalReadyID == r.State.VideoID,
 			Role:           c.RoleName(),
+			VoiceJoined:    c.VoiceJoined,
+			VoiceMuted:     c.VoiceMuted,
+			VoiceSpeaking:  c.VoiceSpeaking,
 		})
 	}
 	return list

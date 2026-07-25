@@ -182,6 +182,15 @@ const translations = {
     moment_not_allowed: "Moments aren't available for this media.",
     moment_not_found: "That moment was not found.",
     moment_wrong_video: "That moment belongs to a different video.",
+    voice_join: "Join voice",
+    voice_leave: "Leave voice",
+    push_to_talk: "Hold to talk",
+    voice_space_hint: "Hold Space to talk",
+    voice_mic_denied: "Microphone permission denied.",
+    voice_full: "Voice is full (max 6 people).",
+    voice_connected: "In voice",
+    voice_muted: "Muted",
+    voice_speaking: "Speaking",
     viewer_you: "(You)",
     guest_badge: "Guest",
     copy_link_btn: "Copy Link",
@@ -375,6 +384,15 @@ const translations = {
     moment_not_allowed: "Momentos não estão disponíveis para esta mídia.",
     moment_not_found: "Momento não encontrado.",
     moment_wrong_video: "Esse momento pertence a outro vídeo.",
+    voice_join: "Entrar na voz",
+    voice_leave: "Sair da voz",
+    push_to_talk: "Segure para falar",
+    voice_space_hint: "Segure Espaço para falar",
+    voice_mic_denied: "Permissão do microfone negada.",
+    voice_full: "Voz lotada (máx. 6 pessoas).",
+    voice_connected: "Na voz",
+    voice_muted: "Mudo",
+    voice_speaking: "Falando",
     viewer_you: "(Você)",
     guest_badge: "Convidado",
     copy_link_btn: "Copiar Link",
@@ -461,7 +479,8 @@ const serverErrorToKey = {
   invalid_queue_order: 'invalid_queue_order',
   moment_not_allowed: 'moment_not_allowed',
   moment_not_found: 'moment_not_found',
-  moment_wrong_video: 'moment_wrong_video'
+  moment_wrong_video: 'moment_wrong_video',
+  voice_full: 'voice_full'
 };
 
 export function translateError(message, fallbackKey = 'room_not_found') {

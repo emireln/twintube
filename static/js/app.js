@@ -6,6 +6,7 @@ import { VideoPlayer } from './player.js';
 import { AuthManager } from './auth.js';
 import { t, translateError } from './i18n.js';
 import { getLocalBlobUrl, isLocalVideoId, registerLocalFileFromPicker, tryMatchLocalFile } from './localmedia.js';
+import { VoiceChat } from './voice.js';
 
 class TwinTubeApp {
   constructor() {
@@ -13,6 +14,7 @@ class TwinTubeApp {
     this.ws = new WSClient();
     this.auth = new AuthManager();
     this.player = null;
+    this.voice = null;
 
     this.ui.bindSettingsAuth(this.auth);
 
@@ -294,6 +296,8 @@ class TwinTubeApp {
         this.ws.sendAction('SUBMIT_MOMENT', { atSeconds });
       });
     }
+
+    this.initVoiceControls();
 
     // Theater Mode Toggle
     const btnTheaterMode = document.getElementById('btnTheaterMode');
@@ -738,6 +742,56 @@ class TwinTubeApp {
     });
   }
 
+  initVoiceControls() {
+    this.voice = new VoiceChat({
+      sendAction: (action, payload) => this.ws.sendAction(action, payload),
+      getClientId: () => this.currentClientID,
+      getPeers: () => this.lastUsers,
+      onStatus: (status) => {
+        if (status.error === 'mic_denied') {
+          this.ui.showToast(t('voice_mic_denied'));
+          return;
+        }
+        if (status.error === 'voice_full') {
+          this.ui.showToast(t('voice_full'));
+          return;
+        }
+        const btnToggle = document.getElementById('btnVoiceToggle');
+        const btnPtt = document.getElementById('btnPushToTalk');
+        const hint = document.getElementById('voiceHint');
+        if (btnToggle) {
+          btnToggle.textContent = status.joined ? t('voice_leave') : t('voice_join');
+        }
+        if (btnPtt) btnPtt.hidden = !status.joined;
+        if (hint) hint.hidden = !status.joined;
+        if (btnPtt) {
+          btnPtt.classList.toggle('is-talking', !!status.speaking);
+        }
+      }
+    });
+
+    const btnToggle = document.getElementById('btnVoiceToggle');
+    if (btnToggle) {
+      btnToggle.addEventListener('click', async () => {
+        if (this.voice.joined) {
+          await this.voice.leave();
+        } else {
+          await this.voice.join();
+        }
+      });
+    }
+    const btnPtt = document.getElementById('btnPushToTalk');
+    if (btnPtt) {
+      const down = (e) => { e.preventDefault(); this.voice.setPTT(true); };
+      const up = (e) => { e.preventDefault(); this.voice.setPTT(false); };
+      btnPtt.addEventListener('mousedown', down);
+      btnPtt.addEventListener('mouseup', up);
+      btnPtt.addEventListener('mouseleave', up);
+      btnPtt.addEventListener('touchstart', down, { passive: false });
+      btnPtt.addEventListener('touchend', up);
+    }
+  }
+
   initWebSocket() {
     this.ws.on('open', () => {
       if (this.accessGranted) {
@@ -802,9 +856,37 @@ class TwinTubeApp {
     });
 
     this.ws.on('USER_LIST', (users) => {
+      const prev = this.lastUsers || [];
       this.lastUsers = users || [];
       this.applyRoleState({});
       this.renderViewersList();
+
+      if (this.voice && this.voice.joined) {
+        const prevIds = new Set(prev.filter((u) => u.voiceJoined).map((u) => u.id));
+        const nextIds = new Set(this.lastUsers.filter((u) => u.voiceJoined).map((u) => u.id));
+        for (const id of nextIds) {
+          if (!prevIds.has(id)) this.voice.handlePeerJoined(id);
+        }
+        for (const id of prevIds) {
+          if (!nextIds.has(id)) this.voice.handlePeerLeft(id);
+        }
+      }
+    });
+
+    this.ws.on('RTC_OFFER', (payload) => {
+      if (this.voice && payload?.fromId && payload?.sdp) {
+        this.voice.handleOffer(payload.fromId, payload.sdp);
+      }
+    });
+    this.ws.on('RTC_ANSWER', (payload) => {
+      if (this.voice && payload?.fromId && payload?.sdp) {
+        this.voice.handleAnswer(payload.fromId, payload.sdp);
+      }
+    });
+    this.ws.on('RTC_ICE', (payload) => {
+      if (this.voice && payload?.fromId && payload?.candidate) {
+        this.voice.handleIce(payload.fromId, payload.candidate);
+      }
     });
 
     this.ws.on('ROOM_META', (payload) => {

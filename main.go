@@ -102,6 +102,7 @@ func main() {
 	}))
 	http.HandleFunc("/api/rooms/", security.Wrap(apiHandler.HandleDeleteRoom))
 	http.HandleFunc("/api/version", security.Wrap(handleVersion))
+	http.HandleFunc("/api/rtc/config", security.Wrap(api.HandleRTCConfig))
 
 	// WebSocket & SPA Routes
 	http.HandleFunc("/ws", security.Wrap(handleWebSocket))
@@ -788,6 +789,60 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Seekable:  state.Seekable,
 		})
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s jumped everyone to %s.", c.Nickname, formatMomentTime(m.AtSeconds)))
+
+	case "VOICE_JOIN":
+		if c.Room == nil {
+			return
+		}
+		if !c.Room.SetVoiceJoined(c, true) {
+			sendError(c, "voice_full")
+			return
+		}
+		c.Room.BroadcastUserList()
+
+	case "VOICE_LEAVE":
+		if c.Room == nil {
+			return
+		}
+		c.Room.SetVoiceJoined(c, false)
+		c.Room.BroadcastUserList()
+
+	case "VOICE_STATUS":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			Muted    bool `json:"muted"`
+			Speaking bool `json:"speaking"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		c.Room.SetVoiceStatus(c, payload.Muted, payload.Speaking)
+		c.Room.BroadcastUserList()
+
+	case "RTC_OFFER", "RTC_ANSWER", "RTC_ICE":
+		if c.Room == nil || !c.VoiceJoined {
+			return
+		}
+		if len(msg.Payload) > 16*1024 {
+			return
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		targetID, _ := payload["targetId"].(string)
+		targetID = strings.TrimSpace(targetID)
+		if targetID == "" || targetID == c.ID {
+			return
+		}
+		delete(payload, "targetId")
+		payload["fromId"] = c.ID
+		raw, _ := json.Marshal(payload)
+		if !c.Room.SendTo(targetID, room.WSMessage{Action: msg.Action, Payload: raw}) {
+			sendError(c, "rtc_target_unavailable")
+		}
 
 	case "VIDEO_REACTION":
 		if c.Room == nil {
