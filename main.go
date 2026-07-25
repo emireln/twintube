@@ -359,6 +359,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		meta := room.Manager.LookupJoinMeta(payload.RoomID)
+		if !meta.Found {
+			denyRoomJoin(c, "Room not found.")
+			return
+		}
 		if meta.Expired {
 			if db.Database != nil && meta.OwnerID != "" {
 				_ = db.Database.DeleteOwnedRoom(payload.RoomID, meta.OwnerID)

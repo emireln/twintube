@@ -478,6 +478,12 @@ class TwinTubeApp {
           return;
         }
 
+        if (msg.includes('not found')) {
+          this.ui.showToast(payload.message || t('room_not_found'));
+          setTimeout(() => { window.location.href = '/'; }, 1200);
+          return;
+        }
+
         this.ui.showToast(payload.message);
         if (msg.includes('expired')) {
           sessionStorage.removeItem(this.joinTokenKey(this.roomId));
@@ -494,8 +500,16 @@ class TwinTubeApp {
       const resp = await fetch(`/api/room/${encodeURIComponent(this.roomId)}/info`, {
         headers: this.authHeaders()
       });
-      if (!resp.ok) return null;
-      return await resp.json();
+      let data = null;
+      try {
+        data = await resp.json();
+      } catch {
+        data = null;
+      }
+      if (!resp.ok) {
+        return { error: data?.error || 'Room not found.', exists: false };
+      }
+      return data;
     } catch {
       return null;
     }
@@ -534,8 +548,20 @@ class TwinTubeApp {
       return false;
     }
 
+    if (info.error && !info.exists) {
+      this.ui.showToast(info.error || t('room_not_found'));
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+      return false;
+    }
+
     if (info.expired) {
       this.ui.showToast(t('room_expired') || 'This room has expired.');
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+      return false;
+    }
+
+    if (!info.exists) {
+      this.ui.showToast(t('room_not_found'));
       setTimeout(() => { window.location.href = '/'; }, 1200);
       return false;
     }

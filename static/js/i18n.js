@@ -102,6 +102,8 @@ const translations = {
     signed_out: "Signed out.",
     account_created: "Account created successfully!",
     room_expired: "This room has expired.",
+    room_not_found: "Room not found. Check the code or create a new room.",
+    invalid_room_code: "Invalid room code format.",
     login_failed: "Login failed",
     register_failed: "Registration failed",
     password_mismatch: "Passwords do not match"
@@ -207,6 +209,8 @@ const translations = {
     signed_out: "Você saiu da conta.",
     account_created: "Conta criada com sucesso!",
     room_expired: "Esta sala expirou.",
+    room_not_found: "Sala não encontrada. Verifique o código ou crie uma nova sala.",
+    invalid_room_code: "Formato de código de sala inválido.",
     login_failed: "Falha no login",
     register_failed: "Falha no cadastro",
     password_mismatch: "As senhas não coincidem"

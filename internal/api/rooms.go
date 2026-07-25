@@ -202,6 +202,7 @@ func (h *RoomAPIHandler) HandleRoomInfo(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":               info.ID,
 		"name":             info.Name,
+		"exists":           info.Exists,
 		"requiresPassword": info.RequiresPassword,
 		"expired":          info.Expired,
 		"isOwner":          isOwner,
@@ -229,6 +230,10 @@ func (h *RoomAPIHandler) HandleRoomAccess(w http.ResponseWriter, r *http.Request
 	}
 
 	meta := h.Manager.LookupJoinMeta(code)
+	if !meta.Found {
+		http.Error(w, `{"error":"Room not found."}`, http.StatusNotFound)
+		return
+	}
 	if meta.Expired {
 		http.Error(w, `{"error":"This room has expired."}`, http.StatusGone)
 		return
@@ -302,18 +307,20 @@ type roomInfoSnapshot struct {
 	OwnerID          string
 	RequiresPassword bool
 	Expired          bool
+	Exists           bool
 }
 
 func (h *RoomAPIHandler) lookupRoomInfo(code string) roomInfoSnapshot {
 	meta := h.Manager.LookupJoinMeta(code)
 	if meta.Expired {
-		return roomInfoSnapshot{ID: code, Expired: true}
+		return roomInfoSnapshot{ID: code, Expired: true, Exists: true}
 	}
 	return roomInfoSnapshot{
 		ID:               meta.RoomID,
 		Name:             meta.Name,
 		OwnerID:          meta.OwnerID,
 		RequiresPassword: meta.RequiresPassword(),
+		Exists:           meta.Found,
 	}
 }
 

@@ -148,6 +148,7 @@ class LandingApp {
     const joinInput = document.getElementById('joinRoomCodeInput');
     const formJoinPassword = document.getElementById('formJoinPassword');
     const btnCloseJoinPassword = document.getElementById('btnCloseJoinPassword');
+    const roomCodePattern = /^[a-zA-Z0-9_-]{4,32}$/;
 
     if (joinForm && joinInput) {
       joinForm.addEventListener('submit', async (e) => {
@@ -157,29 +158,48 @@ class LandingApp {
         if (match && match[1]) code = match[1];
         if (!code) return;
 
+        if (!roomCodePattern.test(code)) {
+          this.ui.showToast(t('invalid_room_code'));
+          return;
+        }
+
         try {
           const resp = await fetch(`/api/room/${encodeURIComponent(code)}/info`, {
             headers: this.authHeaders()
           });
-          const info = await resp.json();
+          let info = {};
+          try {
+            info = await resp.json();
+          } catch {
+            info = {};
+          }
+
+          if (!resp.ok) {
+            this.ui.showToast(info.error || t('room_not_found'));
+            return;
+          }
+
           if (info.expired) {
             this.ui.showToast(t('room_expired'));
             return;
           }
+
+          if (!info.exists) {
+            this.ui.showToast(t('room_not_found'));
+            return;
+          }
+
           if (info.isOwner || !info.requiresPassword) {
             window.location.href = `/room/${code}`;
             return;
           }
-          if (info.requiresPassword) {
-            this.pendingJoinCode = code;
-            const label = document.getElementById('joinPasswordRoomName');
-            if (label) label.textContent = `"${info.name || code}" is password-protected.`;
-            this.ui.showModal('joinPasswordModal');
-            return;
-          }
-          window.location.href = `/room/${code}`;
+
+          this.pendingJoinCode = code;
+          const label = document.getElementById('joinPasswordRoomName');
+          if (label) label.textContent = `"${info.name || code}" is password-protected.`;
+          this.ui.showModal('joinPasswordModal');
         } catch (err) {
-          window.location.href = `/room/${code}`;
+          this.ui.showToast(t('room_not_found'));
         }
       });
     }
