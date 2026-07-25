@@ -1,10 +1,353 @@
-/* TwinTube - UI Component Manager */
+import { getLanguage, setLanguage, updateDOMTranslations, t } from './i18n.js';
 
 export class UIManager {
   constructor() {
     this.toastContainer = document.getElementById('toastContainer');
+    this.cachedRooms = [];
+    this.activeDeleteRoomHandler = null;
+    this.settingsAuth = null;
     this.initTheme();
     this.initTabs();
+    this.initLangPicker();
+    this.initSettings();
+  }
+
+  bindSettingsAuth(auth) {
+    this.settingsAuth = auth;
+  }
+
+  initLangPicker() {
+    const picker = document.getElementById('langPicker');
+    const btn = document.getElementById('btnLangPicker');
+    const menu = document.getElementById('langPickerMenu');
+
+    if (!picker || !btn || !menu) return;
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = picker.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    menu.querySelectorAll('.lang-picker-option').forEach(option => {
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const lang = option.getAttribute('data-lang');
+        if (lang) setLanguage(lang);
+        picker.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    document.addEventListener('click', () => {
+      picker.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  initSettings() {
+    const btnClose = document.getElementById('btnCloseSettings');
+    const langSelect = document.getElementById('settingLangSelect');
+    const btnSaveProfile = document.getElementById('btnSaveProfile');
+    const btnChangePassword = document.getElementById('btnChangePassword');
+    const btnRandomAvatar = document.getElementById('btnRandomAvatar');
+
+    if (btnClose) {
+      btnClose.addEventListener('click', () => this.hideModal('settingsModal'));
+    }
+
+    if (langSelect) {
+      langSelect.value = getLanguage();
+      langSelect.addEventListener('change', (e) => setLanguage(e.target.value));
+    }
+
+    if (btnRandomAvatar) {
+      btnRandomAvatar.addEventListener('click', () => {
+        const username = document.getElementById('settingProfileUsername')?.value.trim() || 'user';
+        const seed = username + '_' + Math.random().toString(36).slice(2, 8);
+        const url = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
+        const avatarInput = document.getElementById('settingProfileAvatar');
+        const preview = document.getElementById('settingProfileAvatarPreview');
+        if (avatarInput) avatarInput.value = url;
+        if (preview) preview.src = url;
+      });
+    }
+
+    if (btnSaveProfile) {
+      btnSaveProfile.addEventListener('click', async () => {
+        if (!this.settingsAuth?.isLoggedIn()) return;
+        const username = document.getElementById('settingProfileUsername')?.value.trim();
+        const email = document.getElementById('settingProfileEmail')?.value.trim();
+        const avatarUrl = document.getElementById('settingProfileAvatar')?.value.trim();
+        btnSaveProfile.disabled = true;
+        try {
+          await this.settingsAuth.updateProfile({ username, email, avatarUrl });
+          this.updateUserNavUI(this.settingsAuth);
+          this.showToast(t('profile_updated'));
+        } catch (err) {
+          this.showToast(err.message || t('profile_update_fail'));
+        } finally {
+          btnSaveProfile.disabled = false;
+        }
+      });
+    }
+
+    if (btnChangePassword) {
+      btnChangePassword.addEventListener('click', async () => {
+        if (!this.settingsAuth?.isLoggedIn()) return;
+        const current = document.getElementById('settingCurrentPassword')?.value || '';
+        const next = document.getElementById('settingNewPassword')?.value || '';
+        const confirm = document.getElementById('settingConfirmPassword')?.value || '';
+        if (next !== confirm) {
+          this.showToast(t('password_mismatch'));
+          return;
+        }
+        btnChangePassword.disabled = true;
+        try {
+          await this.settingsAuth.changePassword(current, next);
+          document.getElementById('settingCurrentPassword').value = '';
+          document.getElementById('settingNewPassword').value = '';
+          document.getElementById('settingConfirmPassword').value = '';
+          this.showToast(t('password_changed'));
+        } catch (err) {
+          this.showToast(err.message || t('password_change_fail'));
+        } finally {
+          btnChangePassword.disabled = false;
+        }
+      });
+    }
+
+    const avatarInput = document.getElementById('settingProfileAvatar');
+    const avatarPreview = document.getElementById('settingProfileAvatarPreview');
+    if (avatarInput && avatarPreview) {
+      avatarInput.addEventListener('input', () => {
+        const url = avatarInput.value.trim();
+        avatarPreview.src = url || '';
+      });
+    }
+
+    updateDOMTranslations();
+  }
+
+  populateSettingsForm(auth) {
+    const profileSection = document.getElementById('settingsProfileSection');
+    const passwordSection = document.getElementById('settingsPasswordSection');
+    const passwordDivider = document.getElementById('settingsPasswordDivider');
+    const loginHint = document.getElementById('settingsLoginHint');
+    const loggedIn = auth?.isLoggedIn();
+
+    if (profileSection) profileSection.style.display = loggedIn ? 'flex' : 'none';
+    if (passwordSection) passwordSection.style.display = loggedIn ? 'flex' : 'none';
+    if (passwordDivider) passwordDivider.style.display = loggedIn ? 'block' : 'none';
+    if (loginHint) loginHint.style.display = loggedIn ? 'none' : 'block';
+
+    if (!loggedIn) return;
+
+    const user = auth.getUser();
+    const usernameEl = document.getElementById('settingProfileUsername');
+    const emailEl = document.getElementById('settingProfileEmail');
+    const avatarEl = document.getElementById('settingProfileAvatar');
+    const previewEl = document.getElementById('settingProfileAvatarPreview');
+
+    if (usernameEl) usernameEl.value = user.username || '';
+    if (emailEl) emailEl.value = user.email || '';
+    if (avatarEl) avatarEl.value = user.avatarUrl || '';
+    if (previewEl && user.avatarUrl) previewEl.src = user.avatarUrl;
+  }
+
+  updateUserNavUI(auth) {
+    const btnOpenAuthLogin = document.getElementById('btnOpenAuthLogin');
+    const btnOpenAuthRegister = document.getElementById('btnOpenAuthRegister');
+    const btnOpenAuth = document.getElementById('btnOpenAuth');
+    const userProfileMenu = document.getElementById('userProfileMenu');
+    const userAvatarText = document.getElementById('userAvatarText');
+    const userAvatarImg = document.getElementById('userAvatarImg');
+    const dropdownUsername = document.getElementById('dropdownUsername');
+    const dropdownEmail = document.getElementById('dropdownEmail');
+
+    if (auth?.isLoggedIn()) {
+      const user = auth.getUser();
+      if (btnOpenAuthLogin) btnOpenAuthLogin.style.display = 'none';
+      if (btnOpenAuthRegister) btnOpenAuthRegister.style.display = 'none';
+      if (btnOpenAuth) btnOpenAuth.style.display = 'none';
+      if (userProfileMenu) userProfileMenu.style.display = 'block';
+      if (dropdownUsername) dropdownUsername.textContent = user.username;
+      if (dropdownEmail) dropdownEmail.textContent = user.email;
+
+      if (user.avatarUrl && userAvatarImg) {
+        userAvatarImg.src = user.avatarUrl;
+        userAvatarImg.hidden = false;
+        if (userAvatarText) userAvatarText.style.display = 'none';
+      } else {
+        if (userAvatarImg) userAvatarImg.hidden = true;
+        if (userAvatarText) {
+          userAvatarText.style.display = '';
+          userAvatarText.textContent = (user.username || 'U').charAt(0).toUpperCase();
+        }
+      }
+    } else {
+      if (btnOpenAuthLogin) btnOpenAuthLogin.style.display = 'inline-flex';
+      if (btnOpenAuthRegister) btnOpenAuthRegister.style.display = 'inline-flex';
+      if (btnOpenAuth) btnOpenAuth.style.display = 'inline-flex';
+      if (userProfileMenu) userProfileMenu.style.display = 'none';
+    }
+  }
+
+  initMyRoomsModal(fetchRooms, deleteRoom, createRoomCallback) {
+    const btnClose = document.getElementById('btnCloseMyRooms');
+    const btnCreate = document.getElementById('btnCreateRoomFromModal');
+    const searchInput = document.getElementById('roomsSearchInput');
+
+    document.addEventListener('click', async (e) => {
+      const btnSettings = e.target.closest('#btnSettings');
+      if (btnSettings) {
+        e.preventDefault();
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('active');
+        const langSelect = document.getElementById('settingLangSelect');
+        if (langSelect) langSelect.value = getLanguage();
+        this.populateSettingsForm(this.settingsAuth);
+        this.showModal('settingsModal');
+        return;
+      }
+
+      const btnMyRooms = e.target.closest('#btnMyRooms');
+      if (btnMyRooms) {
+        e.preventDefault();
+        const dropdown = document.getElementById('profileDropdown');
+        if (dropdown) dropdown.classList.remove('active');
+        this.showModal('myRoomsModal');
+        if (fetchRooms) {
+          await this.renderModalRooms(fetchRooms, deleteRoom);
+        }
+        return;
+      }
+    });
+
+    if (btnClose) {
+      btnClose.addEventListener('click', () => this.hideModal('myRoomsModal'));
+    }
+
+    if (btnCreate) {
+      btnCreate.addEventListener('click', () => {
+        this.hideModal('myRoomsModal');
+        if (createRoomCallback) createRoomCallback();
+        else this.showModal('createRoomModal');
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        this.filterModalRooms(searchInput.value.trim().toLowerCase());
+      });
+    }
+  }
+
+  async renderModalRooms(fetchRooms, deleteRoom) {
+    const list = document.getElementById('modalRoomsList');
+    if (!list) return;
+
+    list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">${t('loading_rooms')}</div>`;
+
+    try {
+      const rooms = await fetchRooms();
+      this.cachedRooms = rooms || [];
+      this.activeDeleteRoomHandler = deleteRoom;
+      this.displayModalRooms(this.cachedRooms);
+    } catch (err) {
+      list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">${this.escapeHTML(err.message || 'Failed to load rooms')}</div>`;
+    }
+  }
+
+  filterModalRooms(query) {
+    if (!this.cachedRooms) return;
+    if (!query) {
+      this.displayModalRooms(this.cachedRooms);
+      return;
+    }
+    const filtered = this.cachedRooms.filter(r => 
+      (r.name || '').toLowerCase().includes(query) || 
+      (r.id || '').toLowerCase().includes(query)
+    );
+    this.displayModalRooms(filtered);
+  }
+
+  displayModalRooms(rooms) {
+    const list = document.getElementById('modalRoomsList');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    if (rooms.length === 0) {
+      list.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">
+          ${t('no_rooms_found', 'No rooms found.')}
+        </div>
+      `;
+      return;
+    }
+
+    rooms.forEach(room => {
+      const card = document.createElement('div');
+      card.className = 'room-item-card';
+
+      const expires = room.expiresAt ? new Date(room.expiresAt) : null;
+      let expiresLabel = '';
+      if (expires) {
+        const diffMs = expires - new Date();
+        const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+        const diffDays = Math.floor(diffHours / 24);
+        const remHours = diffHours % 24;
+        expiresLabel = `${t('expires', 'Expires')} ${diffDays}d ${remHours}h`;
+      } else {
+        expiresLabel = t('saved_badge', 'Saved for 7 days');
+      }
+
+      card.innerHTML = `
+        <div class="room-item-info">
+          <div class="room-item-title">${this.escapeHTML(room.name || ('Room ' + room.id))}</div>
+          <div class="room-item-meta">
+            <code>${this.escapeHTML(room.id)}</code>
+            <span>•</span>
+            <span>${room.hasPassword ? '🔒 ' + t('private', 'Private') : '🌐 ' + t('public', 'Public')}</span>
+            <span>•</span>
+            <span>${expiresLabel}</span>
+          </div>
+        </div>
+        <div class="room-item-actions">
+          <button class="btn btn-secondary btn-copy" style="font-size: 11px; padding: 4px 10px;" title="Copy Link">${t('copy', 'Copy')}</button>
+          <button class="btn btn-primary btn-open" style="font-size: 11px; padding: 4px 10px;" title="Open Room">${t('open', 'Open')}</button>
+          <button class="btn btn-secondary btn-del" style="font-size: 11px; padding: 4px 10px; color: #e53935;" title="Delete Room">${t('delete', 'Delete')}</button>
+        </div>
+      `;
+
+      card.querySelector('.btn-copy').addEventListener('click', () => {
+        const url = `${window.location.origin}/room/${room.id}`;
+        navigator.clipboard.writeText(url).then(() => {
+          this.showToast(t('link_copied', 'Room link copied to clipboard!'));
+        });
+      });
+
+      card.querySelector('.btn-open').addEventListener('click', () => {
+        window.location.href = `/room/${room.id}`;
+      });
+
+      card.querySelector('.btn-del').addEventListener('click', async () => {
+        if (!confirm(`${t('delete_room_confirm')} "${room.name || room.id}"?`)) return;
+        if (this.activeDeleteRoomHandler) {
+          try {
+            await this.activeDeleteRoomHandler(room.id);
+            this.showToast(t('room_deleted', 'Room deleted successfully'));
+            this.cachedRooms = this.cachedRooms.filter(r => r.id !== room.id);
+            this.displayModalRooms(this.cachedRooms);
+          } catch (err) {
+            this.showToast(t('room_delete_fail', err.message || 'Failed to delete room'));
+          }
+        }
+      });
+
+      list.appendChild(card);
+    });
   }
 
   // Theme Management
@@ -135,7 +478,7 @@ export class UIManager {
     if (playlist.length === 0) {
       container.innerHTML = `
         <div style="padding: 24px; text-align: center; color: var(--md-on-surface-variant); font-size: 13px;">
-          The queue is currently empty.<br>Paste a YouTube link in the top bar to add a video!
+          ${t('empty_queue')}
         </div>
       `;
       return;

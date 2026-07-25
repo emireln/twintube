@@ -4,6 +4,7 @@ import { UIManager } from './ui.js';
 import { WSClient } from './ws.js';
 import { VideoPlayer } from './player.js';
 import { AuthManager } from './auth.js';
+import { t } from './i18n.js';
 
 class TwinTubeApp {
   constructor() {
@@ -12,11 +13,14 @@ class TwinTubeApp {
     this.auth = new AuthManager();
     this.player = null;
 
+    this.ui.bindSettingsAuth(this.auth);
+
     this.roomId = this.extractRoomId();
     this.nickname = localStorage.getItem('twintube_nickname') || '';
     this.currentClientID = '';
     this.isHost = false;
     this.playlist = [];
+    this.forceNextSync = false;
 
     this.init();
   }
@@ -28,6 +32,15 @@ class TwinTubeApp {
       return match[1];
     }
     return 'main';
+  }
+
+  authHeaders(json = false) {
+    const headers = {};
+    if (json) headers['Content-Type'] = 'application/json';
+    if (this.auth.isLoggedIn()) {
+      headers['Authorization'] = `Bearer ${this.auth.getToken()}`;
+    }
+    return headers;
   }
 
   async init() {
@@ -49,6 +62,29 @@ class TwinTubeApp {
     this.setupUI();
     this.setupAuthUI();
     this.updateAuthNavUI();
+
+    this.ui.initMyRoomsModal(
+      async () => {
+        const resp = await fetch('/api/rooms/mine', { headers: this.authHeaders() });
+        if (!resp.ok) {
+          const body = await resp.json();
+          throw new Error(body.error || 'Failed to load rooms');
+        }
+        const data = await resp.json();
+        return data.rooms || [];
+      },
+      async (roomId) => {
+        const del = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+          method: 'DELETE',
+          headers: this.authHeaders()
+        });
+        const body = await del.json();
+        if (!del.ok) throw new Error(body.error || 'Delete failed');
+      },
+      () => {
+        window.location.href = '/';
+      }
+    );
 
     // Connect WebSocket FIRST so chat, queue, reactions, viewers ALWAYS work!
     this.initWebSocket();
@@ -72,7 +108,7 @@ class TwinTubeApp {
       btnCopy.addEventListener('click', () => {
         const fullURL = `${window.location.origin}/room/${this.roomId}`;
         navigator.clipboard.writeText(fullURL).then(() => {
-          this.ui.showToast('Room link copied to clipboard!');
+          this.ui.showToast(t('link_copied'));
         });
       });
     }
@@ -82,23 +118,29 @@ class TwinTubeApp {
     if (btnNewRoom) {
       btnNewRoom.addEventListener('click', async () => {
         try {
-          const resp = await fetch('/api/room/create');
+          const resp = await fetch('/api/room/create', {
+            method: 'POST',
+            headers: this.authHeaders(true),
+            body: JSON.stringify({})
+          });
           const data = await resp.json();
+          if (!resp.ok) throw new Error(data.error || 'Failed');
           if (data.url) {
             window.location.href = data.url;
           }
         } catch (err) {
-          this.ui.showToast('Failed to create new room');
+          this.ui.showToast(err.message || 'Failed to create new room');
         }
       });
     }
 
-    // Manual Resync Button
+    // Manual Resync Button — force full video reload
     const btnResync = document.getElementById('btnResync');
     if (btnResync) {
       btnResync.addEventListener('click', () => {
+        this.forceNextSync = true;
         this.ws.sendAction('SYNC_REQUEST');
-        this.ui.showToast('Resync request sent to server.');
+        this.ui.showToast('Resyncing video…');
       });
     }
 
@@ -242,10 +284,11 @@ class TwinTubeApp {
         try {
           await this.auth.login(usernameOrEmail, password);
           this.ui.hideAuthModal();
-          this.ui.showToast('Successfully signed in!');
+          this.ui.showToast(t('signed_in_success'));
+          this.updateAuthNavUI();
           this.joinRoom();
         } catch (err) {
-          this.ui.showToast(err.message || 'Login failed');
+          this.ui.showToast(err.message || t('login_failed'));
         }
       });
     }
@@ -261,17 +304,17 @@ class TwinTubeApp {
         try {
           await this.auth.register(username, email, password);
           this.ui.hideAuthModal();
-          this.ui.showToast('Account created successfully!');
+          this.ui.showToast(t('account_created'));
+          this.updateAuthNavUI();
           this.joinRoom();
         } catch (err) {
-          this.ui.showToast(err.message || 'Registration failed');
+          this.ui.showToast(err.message || t('register_failed'));
         }
       });
     }
 
     const btnUserMenu = document.getElementById('btnUserMenu');
     const profileDropdown = document.getElementById('profileDropdown');
-    const btnSettings = document.getElementById('btnSettings');
     const btnLogout = document.getElementById('btnLogout');
 
     if (btnUserMenu && profileDropdown) {
@@ -285,17 +328,11 @@ class TwinTubeApp {
       });
     }
 
-    if (btnSettings) {
-      btnSettings.addEventListener('click', () => {
-        this.ui.showToast('Room & Account Settings opening soon!');
-      });
-    }
-
     if (btnLogout) {
       btnLogout.addEventListener('click', () => {
         this.auth.logout();
-        this.ui.showToast('Signed out.');
-        window.location.reload();
+        this.ui.showToast(t('signed_out'));
+        this.updateAuthNavUI();
       });
     }
 
@@ -303,22 +340,13 @@ class TwinTubeApp {
   }
 
   updateAuthNavUI() {
-    const btnOpenAuth = document.getElementById('btnOpenAuth');
-    const userProfileMenu = document.getElementById('userProfileMenu');
-    const userAvatarText = document.getElementById('userAvatarText');
-    const dropdownUsername = document.getElementById('dropdownUsername');
-    const dropdownEmail = document.getElementById('dropdownEmail');
-
+    this.ui.updateUserNavUI(this.auth);
     if (this.auth.isLoggedIn()) {
       const user = this.auth.getUser();
-      if (btnOpenAuth) btnOpenAuth.style.display = 'none';
-      if (userProfileMenu) userProfileMenu.style.display = 'block';
-      if (userAvatarText) userAvatarText.textContent = (user.username || 'U').charAt(0).toUpperCase();
-      if (dropdownUsername) dropdownUsername.textContent = user.username;
-      if (dropdownEmail) dropdownEmail.textContent = user.email;
-    } else {
-      if (btnOpenAuth) btnOpenAuth.style.display = 'inline-flex';
-      if (userProfileMenu) userProfileMenu.style.display = 'none';
+      if (user?.username) {
+        this.nickname = user.username;
+        localStorage.setItem('twintube_nickname', this.nickname);
+      }
     }
   }
 
@@ -358,7 +386,11 @@ class TwinTubeApp {
       if (payload.video) {
         this.updateVideoMeta(payload.video.title, payload.video.status);
         if (this.player) {
-          this.player.applyServerState(payload.video, payload.video.serverTimestamp || timestamp);
+          this.player.applyServerState(
+            payload.video,
+            payload.video.serverTimestamp || timestamp,
+            { force: true, timeAlreadyAbsolute: true }
+          );
         }
       }
 
@@ -371,7 +403,13 @@ class TwinTubeApp {
     this.ws.on('STATE_UPDATE', (payload, timestamp) => {
       this.updateVideoMeta(payload.title, payload.status);
       if (this.player) {
-        this.player.applyServerState(payload, payload.serverTimestamp || timestamp);
+        const force = this.forceNextSync || !!payload.forceReload;
+        this.forceNextSync = false;
+        this.player.applyServerState(
+          payload,
+          payload.serverTimestamp || timestamp,
+          { force, timeAlreadyAbsolute: force || !!payload.forceReload }
+        );
       }
     });
 
@@ -405,6 +443,11 @@ class TwinTubeApp {
     this.ws.on('ERROR', (payload) => {
       if (payload && payload.message) {
         this.ui.showToast(payload.message);
+        const msg = String(payload.message).toLowerCase();
+        if (msg.includes('password') || msg.includes('expired')) {
+          sessionStorage.removeItem(`twintube_room_pwd_${this.roomId}`);
+          setTimeout(() => { window.location.href = '/'; }, 1200);
+        }
       }
     });
 
@@ -439,6 +482,11 @@ class TwinTubeApp {
 
     if (this.auth.isLoggedIn()) {
       payload.token = this.auth.getToken();
+    }
+
+    const storedPwd = sessionStorage.getItem(`twintube_room_pwd_${this.roomId}`);
+    if (storedPwd) {
+      payload.password = storedPwd;
     }
 
     this.ws.sendAction('JOIN_ROOM', payload);

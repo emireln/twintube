@@ -182,8 +182,12 @@ body {
 }
 
 .room-chip:hover {
-  background-color: var(--md-outline);
-  border-color: var(--md-primary);
+  background-color: var(--md-surface-variant);
+  border-color: var(--md-outline);
+}
+
+.room-chip:hover code {
+  color: var(--md-on-surface);
 }
 
 .room-chip code {
@@ -225,13 +229,13 @@ body {
 
 .coffee-btn {
   background: transparent;
-  color: var(--md-primary);
+  color: var(--md-on-surface);
   border: none;
 }
 
 .coffee-btn:hover {
   background-color: var(--md-surface-variant);
-  color: var(--md-primary);
+  color: var(--md-on-surface);
 }
 
 /* User Profile & Dropdown */
@@ -292,15 +296,26 @@ body {
 }
 
 .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   background: transparent;
   border: none;
-  padding: 8px 12px;
+  padding: 9px 12px;
   text-align: left;
   font-size: 13px;
+  font-weight: 500;
   color: var(--md-on-surface);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background-color var(--transition-fast);
+}
+
+.dropdown-item svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .dropdown-item:hover {
@@ -1225,10 +1240,258 @@ body.theater-mode #btnTheaterMode {
   display: flex;
   align-items: center;
   gap: 10px;
-  animation: slide-in 0.3s cubic-bezier(0, 0, 0.2, 1);
+  animation: toastIn 0.3s ease-out;
 }
 
-@keyframes slide-in {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Custom Material Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--md-outline);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--md-on-surface-variant);
+}
+
+/* My Rooms Modal & Settings Modal Cards */
+.modal-card-large {
+  max-width: 600px !important;
+  width: 90% !important;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header h2 {
+  font-family: var(--font-brand);
+  font-size: 20px;
+  margin: 0;
+}
+
+.my-rooms-list {
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-right: 4px;
+}
+
+.room-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: var(--md-surface-variant);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--md-outline);
+}
+
+.room-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.room-item-title {
+  font-family: var(--font-brand);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--md-on-surface);
+}
+
+.room-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.room-item-meta code {
+  background: rgba(0,0,0,0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.room-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Language picker */
+.lang-picker {
+  position: relative;
+}
+
+.lang-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.lang-picker-btn:hover {
+  background: var(--md-surface-variant);
+  border-color: var(--md-primary);
+}
+
+.lang-chevron {
+  opacity: 0.6;
+  transition: transform 0.2s;
+}
+
+.lang-picker.open .lang-chevron {
+  transform: rotate(180deg);
+}
+
+.lang-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-md);
+  box-shadow: var(--md-shadow-2);
+  display: none;
+  z-index: 300;
+}
+
+.lang-picker.open .lang-picker-menu {
+  display: block;
+}
+
+.lang-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lang-picker-option:hover,
+.lang-picker-option.active {
+  background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+}
+
+.lang-picker-option.active {
+  font-weight: 600;
+  color: var(--md-primary);
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.modal-card-settings {
+  max-width: 480px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.settings-modal-body {
+  gap: 0;
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--md-outline);
+  margin: 18px 0;
+}
+
+.settings-login-hint {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.profile-avatar-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--md-surface-variant);
+  border: 2px solid var(--md-outline);
+  flex-shrink: 0;
+}
+
+.profile-avatar-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.lang-select-styled {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
 }

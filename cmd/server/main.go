@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"twintube/internal/api"
 	"twintube/internal/auth"
 	"twintube/internal/db"
 	"twintube/internal/room"
@@ -68,15 +69,28 @@ func main() {
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", securityHeadersMiddleware(http.StripPrefix("/static/", fs)))
 
+	apiHandler := api.NewRoomAPIHandler(room.Manager)
+
 	// Auth Routes
 	http.HandleFunc("/api/auth/register", auth.HandleRegister)
 	http.HandleFunc("/api/auth/login", auth.HandleLogin)
 	http.HandleFunc("/api/auth/me", auth.HandleGetMe)
+	http.HandleFunc("/api/auth/profile", auth.HandleUpdateProfile)
+	http.HandleFunc("/api/auth/password", auth.HandleChangePassword)
 
 	// API Room & Metadata Routes
 	http.HandleFunc("/api/youtube/info", handleVideoInfo)
 	http.HandleFunc("/api/video/info", handleVideoInfo)
-	http.HandleFunc("/api/room/create", handleCreateRoom)
+	http.HandleFunc("/api/room/create", apiHandler.HandleCreateRoom)
+	http.HandleFunc("/api/rooms/mine", apiHandler.HandleMyRooms)
+	http.HandleFunc("/api/room/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/info") {
+			apiHandler.HandleRoomInfo(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	http.HandleFunc("/api/rooms/", apiHandler.HandleDeleteRoom)
 
 	// WebSocket & SPA Routes
 	http.HandleFunc("/ws", handleWebSocket)
@@ -111,17 +125,6 @@ func serveLandingOrRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, filepath.Join(".", "static", path))
-}
-
-func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	roomCode := utils.GenerateRoomCode()
-	room.Manager.GetOrCreateRoom(roomCode)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"roomCode": roomCode,
-		"url":      "/room/" + roomCode,
-	})
 }
 
 func handleVideoInfo(w http.ResponseWriter, r *http.Request) {
@@ -235,6 +238,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			RoomID   string `json:"roomId"`
 			Nickname string `json:"nickname"`
 			Token    string `json:"token"`
+			Password string `json:"password"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return
@@ -266,8 +270,33 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			}
 		}
 
+		if db.Database != nil {
+			if rec, err := db.Database.GetRoomByID(payload.RoomID); err == nil && rec != nil {
+				if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
+					_ = db.Database.DeleteOwnedRoom(rec.ID, rec.OwnerID)
+					room.Manager.RemoveRoom(rec.ID)
+					sendError(c, "This room has expired.")
+					return
+				}
+			}
+		}
+
+		target := room.Manager.GetOrCreateRoom(payload.RoomID)
+		if target.IsExpired() {
+			room.Manager.RemoveRoom(payload.RoomID)
+			sendError(c, "This room has expired.")
+			return
+		}
+		if hash := target.PasswordHashValue(); hash != "" {
+			isOwner := c.UserID != "" && c.UserID == target.OwnerIDValue()
+			if !isOwner && !auth.CheckPasswordHash(payload.Password, hash) {
+				sendError(c, "Incorrect room password.")
+				return
+			}
+		}
+
 		c.RoomID = payload.RoomID
-		c.Room = room.Manager.GetOrCreateRoom(payload.RoomID)
+		c.Room = target
 		c.Room.Register <- c
 
 	case "STATE_CHANGE":
@@ -465,6 +494,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			"status":          state.Status,
 			"currentTime":     c.Room.GetCalculatedTime(),
 			"serverTimestamp": nowMs,
+			"forceReload":     true,
 		}
 
 		raw, _ := json.Marshal(statePayload)

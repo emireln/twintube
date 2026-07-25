@@ -246,6 +246,31 @@ func (d *DB) createTables() error {
 			return err
 		}
 	}
+
+	return d.migrateRoomColumns()
+}
+
+func (d *DB) migrateRoomColumns() error {
+	alterations := []string{
+		`ALTER TABLE rooms ADD COLUMN owner_id VARCHAR(64) DEFAULT ''`,
+		`ALTER TABLE rooms ADD COLUMN expires_at TIMESTAMP WITH TIME ZONE`,
+	}
+	if d.dbType == DBTypeSQLite {
+		alterations = []string{
+			`ALTER TABLE rooms ADD COLUMN owner_id TEXT DEFAULT ''`,
+			`ALTER TABLE rooms ADD COLUMN expires_at DATETIME`,
+		}
+	}
+
+	for _, q := range alterations {
+		if _, err := d.db.Exec(q); err != nil {
+			msg := strings.ToLower(err.Error())
+			if strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists") {
+				continue
+			}
+			log.Printf("[DB] migrateRoomColumns note: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -284,6 +309,40 @@ func (d *DB) GetUserByID(id string) (*User, error) {
 		return nil, err
 	}
 	return &u, nil
+}
+
+func (d *DB) IsUsernameOrEmailTaken(username, email, excludeID string) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ? LIMIT 1;`)
+	var id string
+	err := d.db.QueryRow(query, username, email, excludeID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (d *DB) UpdateUserProfile(id, username, email, avatarURL string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`UPDATE users SET username = ?, email = ?, avatar_url = ? WHERE id = ?;`)
+	_, err := d.db.Exec(query, username, email, avatarURL, id)
+	return err
+}
+
+func (d *DB) UpdateUserPassword(id, passwordHash string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`UPDATE users SET password_hash = ? WHERE id = ?;`)
+	_, err := d.db.Exec(query, passwordHash, id)
+	return err
 }
 
 func (d *DB) SaveRoom(roomID, hostID, videoID, status string, currentTime float64) error {
@@ -398,4 +457,100 @@ func (d *DB) DeletePlaylistItem(itemID string) error {
 	query := d.Rebind(`DELETE FROM playlist_items WHERE id = ?;`)
 	_, err := d.db.Exec(query, itemID)
 	return err
+}
+
+type RoomRecord struct {
+	ID             string     `db:"id"`
+	Name           string     `db:"name"`
+	IsPrivate      bool       `db:"is_private"`
+	PasswordHash   string     `db:"password_hash"`
+	OwnerID        string     `db:"owner_id"`
+	ExpiresAt      *time.Time `db:"expires_at"`
+	CurrentVideoID string     `db:"current_video_id"`
+	CurrentStatus  string     `db:"current_status"`
+	CurrentTime    float64    `db:"current_time"`
+	CreatedAt      time.Time  `db:"created_at"`
+}
+
+func (d *DB) CreateRoomRecord(id, name, ownerID, pwdHash string, isPrivate bool, expiresAt *time.Time) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	isPrivInt := 0
+	if isPrivate {
+		isPrivInt = 1
+	}
+	hostID := ownerID
+	if hostID == "" {
+		hostID = "system"
+	}
+
+	var query string
+	if d.dbType == DBTypePostgres {
+		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7);`
+	} else {
+		query = `INSERT INTO rooms (id, name, owner_id, host_id, password_hash, is_private, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?);`
+	}
+
+	_, err := d.db.Exec(query, id, name, ownerID, hostID, pwdHash, isPrivInt, expiresAt)
+	return err
+}
+
+func (d *DB) GetRoomByID(id string) (*RoomRecord, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`SELECT id, name, owner_id, password_hash, is_private, expires_at, current_video_id, current_status, current_time, created_at FROM rooms WHERE id = ?;`)
+	row := d.db.QueryRow(query, id)
+
+	var rec RoomRecord
+	var isPrivInt int
+	err := row.Scan(&rec.ID, &rec.Name, &rec.OwnerID, &rec.PasswordHash, &isPrivInt, &rec.ExpiresAt, &rec.CurrentVideoID, &rec.CurrentStatus, &rec.CurrentTime, &rec.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	rec.IsPrivate = isPrivInt == 1
+	return &rec, nil
+}
+
+func (d *DB) ListRoomsByOwner(ownerID string) ([]RoomRecord, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`SELECT id, name, owner_id, password_hash, is_private, expires_at, created_at FROM rooms WHERE owner_id = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY created_at DESC;`)
+	rows, err := d.db.Query(query, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []RoomRecord
+	for rows.Next() {
+		var rec RoomRecord
+		var isPrivInt int
+		if err := rows.Scan(&rec.ID, &rec.Name, &rec.OwnerID, &rec.PasswordHash, &isPrivInt, &rec.ExpiresAt, &rec.CreatedAt); err != nil {
+			continue
+		}
+		rec.IsPrivate = isPrivInt == 1
+		list = append(list, rec)
+	}
+	return list, nil
+}
+
+func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	query := d.Rebind(`DELETE FROM rooms WHERE id = ? AND owner_id = ?;`)
+	res, err := d.db.Exec(query, id, ownerID)
+	if err != nil {
+		return err
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("room not found or unauthorized")
+	}
+	return nil
 }

@@ -47,17 +47,53 @@ type Client struct {
 }
 
 type Room struct {
-	ID         string
-	Name       string
-	IsPrivate  bool
-	HostID     string
-	State      VideoState
-	Clients    map[string]*Client
-	Playlist   []db.PlaylistItem
-	Register   chan *Client
-	Unregister chan *Client
-	Broadcast  chan WSMessage
-	mu         sync.RWMutex
+	ID           string
+	Name         string
+	IsPrivate    bool
+	OwnerID      string
+	PasswordHash string
+	ExpiresAt    *time.Time
+	HostID       string
+	State        VideoState
+	Clients      map[string]*Client
+	Playlist     []db.PlaylistItem
+	Register     chan *Client
+	Unregister   chan *Client
+	Broadcast    chan WSMessage
+	mu           sync.RWMutex
+}
+
+func (rm *RoomManager) RemoveRoom(roomID string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	delete(rm.rooms, roomID)
+}
+
+func (r *Room) RequiresPassword() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.PasswordHash != ""
+}
+
+func (r *Room) PasswordHashValue() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.PasswordHash
+}
+
+func (r *Room) OwnerIDValue() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.OwnerID
+}
+
+func (r *Room) IsExpired() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.ExpiresAt == nil {
+		return false
+	}
+	return !r.ExpiresAt.After(time.Now())
 }
 
 type RoomManager struct {
@@ -94,6 +130,22 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 		}
 
 		if db.Database != nil {
+			if rec, err := db.Database.GetRoomByID(roomID); err == nil && rec != nil {
+				if rec.Name != "" {
+					room.Name = rec.Name
+				}
+				room.OwnerID = rec.OwnerID
+				room.PasswordHash = rec.PasswordHash
+				room.IsPrivate = rec.IsPrivate || rec.PasswordHash != ""
+				room.ExpiresAt = rec.ExpiresAt
+				if rec.CurrentVideoID != "" {
+					room.State.VideoID = rec.CurrentVideoID
+				}
+				if rec.CurrentStatus != "" {
+					room.State.Status = rec.CurrentStatus
+				}
+				room.State.CurrentTime = rec.CurrentTime
+			}
 			if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
 				room.Playlist = items
 			}

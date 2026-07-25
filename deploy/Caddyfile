@@ -1,0 +1,15 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Main app — frontend + backend + WebSockets
+twintube.site, www.twintube.site {
+	encode gzip
+	reverse_proxy app:8080
+}
+
+# Marketing / home landing page (same app, host-based routing)
+home.twintube.site {
+	encode gzip
+	reverse_proxy app:8080
+}

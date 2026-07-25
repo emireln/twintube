@@ -56,6 +56,48 @@ export class AuthManager {
     return data;
   }
 
+  async updateProfile({ username, email, avatarUrl }) {
+    const resp = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ username, email, avatarUrl })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || 'Failed to update profile');
+    }
+
+    if (data.token) {
+      this.setAuthData(data.token, data.user);
+    } else if (data.user) {
+      this.user = data.user;
+      localStorage.setItem('twintube_user', JSON.stringify(data.user));
+      this.notifyListeners();
+    }
+    return data;
+  }
+
+  async changePassword(currentPassword, newPassword) {
+    const resp = await fetch('/api/auth/password', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || 'Failed to change password');
+    }
+    return data;
+  }
+
   async checkAuth() {
     if (!this.token) return null;
 

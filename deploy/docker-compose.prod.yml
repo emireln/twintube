@@ -1,0 +1,69 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: twintube_app
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      PORT: "8080"
+      APP_DOMAIN: twintube.site
+      HOME_DOMAIN: home.twintube.site
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - twintube_net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: twintube_postgres
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-twintube_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-twintube_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-twintube_user} -d ${POSTGRES_DB:-twintube_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+    networks:
+      - twintube_net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: twintube_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@twintube.site}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - twintube_net
+
+networks:
+  twintube_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

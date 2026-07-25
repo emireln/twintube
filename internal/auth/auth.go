@@ -253,3 +253,181 @@ func HandleGetMe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
+
+type UpdateProfileRequest struct {
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+func userFromRequest(r *http.Request) (*Claims, *db.User, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		return nil, nil, fmt.Errorf("unauthorized")
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := ParseJWTToken(tokenString)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid token")
+	}
+
+	if db.Database == nil {
+		return nil, nil, fmt.Errorf("database unavailable")
+	}
+
+	user, err := db.Database.GetUserByID(claims.UserID)
+	if err != nil || user == nil {
+		return nil, nil, fmt.Errorf("user not found")
+	}
+
+	return claims, user, nil
+}
+
+func writeJSONError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func isValidAvatarURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return true
+	}
+	if len(raw) > 500 {
+		return false
+	}
+	lower := strings.ToLower(raw)
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+}
+
+func HandleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPatch {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, user, err := userFromRequest(r)
+	if err != nil {
+		writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.AvatarURL = strings.TrimSpace(req.AvatarURL)
+
+	if len(req.Username) < 3 || len(req.Username) > 25 {
+		writeJSONError(w, "Username must be between 3 and 25 characters", http.StatusBadRequest)
+		return
+	}
+
+	emailRegex := regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,4}$`)
+	if !emailRegex.MatchString(req.Email) {
+		writeJSONError(w, "Invalid email address", http.StatusBadRequest)
+		return
+	}
+
+	if !isValidAvatarURL(req.AvatarURL) {
+		writeJSONError(w, "Avatar URL must be a valid http(s) link", http.StatusBadRequest)
+		return
+	}
+
+	if req.AvatarURL == "" {
+		req.AvatarURL = fmt.Sprintf("https://api.dicebear.com/7.x/bottts/svg?seed=%s", req.Username)
+	}
+
+	taken, err := db.Database.IsUsernameOrEmailTaken(req.Username, req.Email, user.ID)
+	if err != nil {
+		writeJSONError(w, "Failed to validate profile", http.StatusInternalServerError)
+		return
+	}
+	if taken {
+		writeJSONError(w, "Username or email is already in use", http.StatusConflict)
+		return
+	}
+
+	if err := db.Database.UpdateUserProfile(user.ID, req.Username, req.Email, req.AvatarURL); err != nil {
+		writeJSONError(w, "Failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	user.Username = req.Username
+	user.Email = req.Email
+	user.AvatarURL = req.AvatarURL
+
+	token, err := GenerateJWTToken(user.ID, user.Username)
+	if err != nil {
+		writeJSONError(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token: token,
+		User:  *user,
+	})
+}
+
+func HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, user, err := userFromRequest(r)
+	if err != nil {
+		writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	req.CurrentPassword = strings.TrimSpace(req.CurrentPassword)
+	req.NewPassword = strings.TrimSpace(req.NewPassword)
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		writeJSONError(w, "Current and new password are required", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		writeJSONError(w, "New password must be at least 6 characters long", http.StatusBadRequest)
+		return
+	}
+
+	if !CheckPasswordHash(req.CurrentPassword, user.PasswordHash) {
+		writeJSONError(w, "Current password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	passwordHash, err := HashPassword(req.NewPassword)
+	if err != nil {
+		writeJSONError(w, "Failed to process password", http.StatusInternalServerError)
+		return
+	}
+
+	if err := db.Database.UpdateUserPassword(user.ID, passwordHash); err != nil {
+		writeJSONError(w, "Failed to update password", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Password updated"})
+}

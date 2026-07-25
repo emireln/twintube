@@ -51,7 +51,11 @@ export class VideoPlayer {
             if (this.pendingServerState) {
               const pending = this.pendingServerState;
               this.pendingServerState = null;
-              this.applyServerState(pending.videoState, pending.serverTimestamp);
+              this.applyServerState(
+                pending.videoState,
+                pending.serverTimestamp,
+                pending.options || { force: true, timeAlreadyAbsolute: true }
+              );
             }
           },
           onStateChange: (event) => this.onYTStateChange(event)
@@ -139,18 +143,27 @@ export class VideoPlayer {
     return 'youtube';
   }
 
-  applyServerState(videoState, serverTimestamp) {
+  getLoadedVideoId() {
+    if (!this.ytPlayer || !this.isReady) return '';
+    try {
+      const data = this.ytPlayer.getVideoData && this.ytPlayer.getVideoData();
+      if (data && data.video_id) return data.video_id;
+    } catch (_) { /* ignore */ }
+    return '';
+  }
+
+  applyServerState(videoState, serverTimestamp, options = {}) {
     if (!videoState) return;
 
+    const force = !!options.force;
+    const timeAlreadyAbsolute = !!options.timeAlreadyAbsolute;
     const videoId = videoState.videoId || 'dQw4w9WgXcQ';
     const status = videoState.status || 'PAUSED';
     let expectedTime = typeof videoState.currentTime === 'number' ? videoState.currentTime : 0.0;
 
-    // Prefer payload serverTimestamp when present (more accurate than WS envelope)
     const stamp = videoState.serverTimestamp || serverTimestamp;
-    const now = Date.now();
-    if (status === 'PLAYING' && stamp) {
-      const elapsedSec = (now - stamp) / 1000.0;
+    if (!timeAlreadyAbsolute && status === 'PLAYING' && stamp) {
+      const elapsedSec = (Date.now() - stamp) / 1000.0;
       if (elapsedSec > 0 && elapsedSec < 3600) {
         expectedTime += elapsedSec;
       }
@@ -158,11 +171,12 @@ export class VideoPlayer {
 
     const platform = this.detectPlatform(videoId);
 
-    // Queue INIT_STATE / STATE_UPDATE until YouTube API is ready
     if (platform === 'youtube' && (!this.ytPlayer || !this.isReady)) {
-      this.pendingServerState = { videoState, serverTimestamp: stamp };
-      this.currentVideoId = videoId;
-      this.currentStatus = status;
+      this.pendingServerState = {
+        videoState: { ...videoState, videoId, status, currentTime: expectedTime, serverTimestamp: stamp },
+        serverTimestamp: stamp,
+        options: { force: true, timeAlreadyAbsolute: true }
+      };
       return;
     }
 
@@ -170,25 +184,26 @@ export class VideoPlayer {
       this.switchPlatform(platform);
     }
 
-    const videoChanged = this.currentVideoId !== videoId;
-    this.currentVideoId = videoId;
     this.currentStatus = status;
-    this.markRemoteUpdate(videoChanged ? 2000 : 1200);
+    const loadedId = platform === 'youtube' ? this.getLoadedVideoId() : this.currentVideoId;
+    const needsLoad = force || !loadedId || loadedId !== videoId;
+
+    this.markRemoteUpdate(needsLoad ? 2500 : 1200);
+    this.currentVideoId = videoId;
 
     if (platform === 'youtube' && this.ytPlayer && this.isReady) {
-      if (videoChanged) {
+      if (needsLoad) {
         this.ytPlayer.loadVideoById({
           videoId,
           startSeconds: Math.max(0, expectedTime)
         });
         if (status !== 'PLAYING') {
-          // loadVideoById autoplays; pause if room is paused
           setTimeout(() => {
             this.markRemoteUpdate(800);
             if (this.ytPlayer && this.ytPlayer.pauseVideo) {
               this.ytPlayer.pauseVideo();
             }
-          }, 350);
+          }, 400);
         }
       } else {
         const playerTime = this.ytPlayer.getCurrentTime ? this.ytPlayer.getCurrentTime() : 0;

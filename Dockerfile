@@ -1,32 +1,35 @@
 # Multi-stage Docker build for TwinTube Production VPS Deployment
 FROM golang:1.21-alpine AS builder
 
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_DATE=unknown
+
 WORKDIR /app
 
-# Install ca-certificates and git
 RUN apk add --no-cache ca-certificates git
 
-# Copy module files & download dependencies
-COPY go.mod ./
-RUN go mod download || true
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Copy source files
 COPY . .
-RUN go mod tidy
 
-# Build lightweight static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o twintube .
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-w -s \
+    -X twintube/internal/version.Version=${VERSION} \
+    -X twintube/internal/version.Commit=${GIT_COMMIT} \
+    -X twintube/internal/version.Build=${BUILD_DATE}" \
+    -o twintube .
 
-# Production runtime image
-FROM alpine:latest
+FROM alpine:3.19
 
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata
 
-# Copy binary and static assets
 COPY --from=builder /app/twintube .
 COPY --from=builder /app/static ./static
+COPY --from=builder /app/VERSION ./VERSION
 
 EXPOSE 8080
 
