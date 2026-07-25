@@ -28,6 +28,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     checkWebSocketOrigin,
 }
 
+var joinPasswordLimiter = security.NewRateLimiter(10, 5*time.Minute)
+
 func loadEnvFile(filename string) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -223,10 +225,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &room.Client{
-		ID:      utils.GenerateRandomID(8),
-		IsGuest: true,
-		Conn:    conn,
-		Send:    make(chan room.WSMessage, 256),
+		ID:       utils.GenerateRandomID(8),
+		IsGuest:  true,
+		RemoteIP: security.ClientIP(r),
+		Conn:     conn,
+		Send:     make(chan room.WSMessage, 256),
 	}
 
 	go clientWritePump(client)
@@ -368,6 +371,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if hash := target.PasswordHashValue(); hash != "" {
 			isOwner := c.UserID != "" && c.UserID == target.OwnerIDValue()
 			if !isOwner && !auth.CheckPasswordHash(payload.Password, hash) {
+				failKey := payload.RoomID + "|" + c.RemoteIP
+				if !joinPasswordLimiter.Allow(failKey) {
+					sendError(c, "Too many failed password attempts. Try again later.")
+					return
+				}
 				sendError(c, "Incorrect room password.")
 				return
 			}

@@ -66,10 +66,16 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 
 	var pwdHash string
 	if req.Password != "" {
-		bytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
-		if err == nil {
-			pwdHash = string(bytes)
+		if len(req.Password) < 4 {
+			http.Error(w, `{"error":"Room password must be at least 4 characters"}`, http.StatusBadRequest)
+			return
 		}
+		bytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		if err != nil {
+			http.Error(w, `{"error":"Failed to secure room password"}`, http.StatusInternalServerError)
+			return
+		}
+		pwdHash = string(bytes)
 	}
 
 	var expiresAt *time.Time
@@ -176,23 +182,78 @@ func (h *RoomAPIHandler) HandleRoomInfo(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	rmRoom := h.Manager.GetOrCreateRoom(code)
-	w.Header().Set("Content-Type", "application/json")
+	info := h.lookupRoomInfo(code)
 
-	if rmRoom.IsExpired() {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"expired":          true,
-			"requiresPassword": false,
-		})
-		return
+	var userID string
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		if claims, err := auth.ParseJWTToken(tokenStr); err == nil && claims != nil {
+			userID = claims.UserID
+		}
 	}
 
+	isOwner := userID != "" && info.OwnerID != "" && userID == info.OwnerID
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":               rmRoom.ID,
-		"name":             rmRoom.Name,
-		"requiresPassword": rmRoom.RequiresPassword(),
-		"expired":          false,
+		"id":               info.ID,
+		"name":             info.Name,
+		"requiresPassword": info.RequiresPassword,
+		"expired":          info.Expired,
+		"isOwner":          isOwner,
 	})
+}
+
+type roomInfoSnapshot struct {
+	ID               string
+	Name             string
+	OwnerID          string
+	RequiresPassword bool
+	Expired          bool
+}
+
+func (h *RoomAPIHandler) lookupRoomInfo(code string) roomInfoSnapshot {
+	defaultName := "Room " + code
+
+	if rmRoom := h.Manager.GetRoom(code); rmRoom != nil {
+		if rmRoom.IsExpired() {
+			return roomInfoSnapshot{ID: code, Expired: true}
+		}
+		return roomInfoSnapshot{
+			ID:               code,
+			Name:             rmRoom.Name,
+			OwnerID:          rmRoom.OwnerIDValue(),
+			RequiresPassword: rmRoom.RequiresPassword(),
+		}
+	}
+
+	if db.Database != nil {
+		rec, err := db.Database.GetRoomByID(code)
+		if err != nil || rec == nil {
+			return roomInfoSnapshot{ID: code, Name: defaultName}
+		}
+
+		expired := false
+		if rec.OwnerID != "" && rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
+			expired = true
+		}
+
+		name := rec.Name
+		if name == "" {
+			name = defaultName
+		}
+
+		return roomInfoSnapshot{
+			ID:               code,
+			Name:             name,
+			OwnerID:          rec.OwnerID,
+			RequiresPassword: rec.PasswordHash != "",
+			Expired:          expired,
+		}
+	}
+
+	return roomInfoSnapshot{ID: code, Name: defaultName}
 }
 
 func (h *RoomAPIHandler) HandleDeleteRoom(w http.ResponseWriter, r *http.Request) {

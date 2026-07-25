@@ -78,7 +78,7 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	}
 }
 
-func clientIP(r *http.Request) string {
+func ClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
@@ -112,7 +112,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 func (rl *RateLimiter) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(clientIP(r)) {
+		if !rl.Allow(ClientIP(r)) {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, `{"error":"Too many requests. Please try again later."}`, http.StatusTooManyRequests)

@@ -41,6 +41,7 @@ type Client struct {
 	IsHost    bool
 	IsGuest   bool
 	AvatarURL string
+	RemoteIP  string
 	Conn      *websocket.Conn
 	Send      chan WSMessage
 	Room      *Room
@@ -67,6 +68,12 @@ func (rm *RoomManager) RemoveRoom(roomID string) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	delete(rm.rooms, roomID)
+}
+
+func (rm *RoomManager) GetRoom(roomID string) *Room {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.rooms[roomID]
 }
 
 func (r *Room) RequiresPassword() bool {

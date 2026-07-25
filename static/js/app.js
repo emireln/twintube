@@ -19,6 +19,8 @@ class TwinTubeApp {
     this.nickname = localStorage.getItem('twintube_nickname') || '';
     this.currentClientID = '';
     this.isHost = false;
+    this.hasJoined = false;
+    this.accessGranted = false;
     this.playlist = [];
     this.forceNextSync = false;
 
@@ -87,7 +89,12 @@ class TwinTubeApp {
       }
     );
 
-    // Connect WebSocket FIRST so chat, queue, reactions, viewers ALWAYS work!
+    const accessOk = await this.resolveRoomAccess();
+    if (!accessOk) return;
+
+    this.accessGranted = true;
+
+    // Connect WebSocket after password gate passes
     this.initWebSocket();
 
     // Initialize player inside try/catch so player errors never block socket logic
@@ -377,10 +384,13 @@ class TwinTubeApp {
 
   initWebSocket() {
     this.ws.on('open', () => {
-      this.joinRoom();
+      if (this.accessGranted) {
+        this.joinRoom();
+      }
     });
 
     this.ws.on('INIT_STATE', (payload, timestamp) => {
+      this.hasJoined = true;
       this.currentClientID = payload.clientId || '';
       this.isHost = payload.isHost;
       this.playlist = payload.playlist || [];
@@ -449,9 +459,24 @@ class TwinTubeApp {
 
     this.ws.on('ERROR', (payload) => {
       if (payload && payload.message) {
-        this.ui.showToast(payload.message);
         const msg = String(payload.message).toLowerCase();
-        if (msg.includes('password') || msg.includes('expired')) {
+
+        if (msg.includes('password')) {
+          sessionStorage.removeItem(`twintube_room_pwd_${this.roomId}`);
+          this.hasJoined = false;
+
+          if (msg.includes('too many')) {
+            this.ui.showToast(payload.message);
+            setTimeout(() => { window.location.href = '/'; }, 1200);
+            return;
+          }
+
+          this.handleWrongRoomPassword(payload.message);
+          return;
+        }
+
+        this.ui.showToast(payload.message);
+        if (msg.includes('expired')) {
           sessionStorage.removeItem(`twintube_room_pwd_${this.roomId}`);
           setTimeout(() => { window.location.href = '/'; }, 1200);
         }
@@ -459,6 +484,114 @@ class TwinTubeApp {
     });
 
     this.ws.connect();
+  }
+
+  async fetchRoomInfo() {
+    try {
+      const resp = await fetch(`/api/room/${encodeURIComponent(this.roomId)}/info`, {
+        headers: this.authHeaders()
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  }
+
+  roomPasswordKey() {
+    return `twintube_room_pwd_${this.roomId}`;
+  }
+
+  async resolveRoomAccess() {
+    const info = await this.fetchRoomInfo();
+    if (!info) return true;
+
+    if (info.expired) {
+      this.ui.showToast(t('room_expired') || 'This room has expired.');
+      setTimeout(() => { window.location.href = '/'; }, 1200);
+      return false;
+    }
+
+    if (info.isOwner) {
+      sessionStorage.removeItem(this.roomPasswordKey());
+      return true;
+    }
+
+    if (!info.requiresPassword) {
+      return true;
+    }
+
+    let pwd = sessionStorage.getItem(this.roomPasswordKey());
+    if (!pwd) {
+      pwd = await this.promptRoomPassword(info.name || this.roomId);
+      if (!pwd) {
+        window.location.href = '/';
+        return false;
+      }
+      sessionStorage.setItem(this.roomPasswordKey(), pwd);
+    }
+
+    return true;
+  }
+
+  async handleWrongRoomPassword(message) {
+    this.ui.showToast(message || t('password_required'));
+
+    const info = await this.fetchRoomInfo();
+    const roomName = info?.name || this.roomId;
+    const pwd = await this.promptRoomPassword(roomName);
+    if (!pwd) {
+      window.location.href = '/';
+      return;
+    }
+
+    sessionStorage.setItem(this.roomPasswordKey(), pwd);
+    this.joinRoom();
+  }
+
+  promptRoomPassword(roomName) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('joinPasswordModal');
+      const label = document.getElementById('joinPasswordRoomName');
+      const input = document.getElementById('joinRoomPasswordInput');
+      const form = document.getElementById('formJoinPassword');
+      const btnClose = document.getElementById('btnCloseJoinPassword');
+
+      if (!modal || !form || !input) {
+        resolve('');
+        return;
+      }
+
+      if (label) {
+        label.textContent = `"${roomName}" is password-protected.`;
+      }
+      input.value = '';
+
+      const cleanup = () => {
+        form.removeEventListener('submit', onSubmit);
+        if (btnClose) btnClose.removeEventListener('click', onCancel);
+      };
+
+      const onSubmit = (e) => {
+        e.preventDefault();
+        const pwd = input.value.trim();
+        if (pwd.length < 4) return;
+        this.ui.hideModal('joinPasswordModal');
+        cleanup();
+        resolve(pwd);
+      };
+
+      const onCancel = () => {
+        this.ui.hideModal('joinPasswordModal');
+        cleanup();
+        resolve('');
+      };
+
+      form.addEventListener('submit', onSubmit);
+      if (btnClose) btnClose.addEventListener('click', onCancel);
+      this.ui.showModal('joinPasswordModal');
+      input.focus();
+    });
   }
 
   renderFloatingReaction(reaction, nickname) {
@@ -491,7 +624,7 @@ class TwinTubeApp {
       payload.token = this.auth.getToken();
     }
 
-    const storedPwd = sessionStorage.getItem(`twintube_room_pwd_${this.roomId}`);
+    const storedPwd = sessionStorage.getItem(this.roomPasswordKey());
     if (storedPwd) {
       payload.password = storedPwd;
     }

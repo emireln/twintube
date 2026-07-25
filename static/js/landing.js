@@ -138,10 +138,16 @@ class LandingApp {
         if (!code) return;
 
         try {
-          const resp = await fetch(`/api/room/${encodeURIComponent(code)}/info`);
+          const resp = await fetch(`/api/room/${encodeURIComponent(code)}/info`, {
+            headers: this.authHeaders()
+          });
           const info = await resp.json();
           if (info.expired) {
             this.ui.showToast(t('room_expired'));
+            return;
+          }
+          if (info.isOwner || !info.requiresPassword) {
+            window.location.href = `/room/${code}`;
             return;
           }
           if (info.requiresPassword) {

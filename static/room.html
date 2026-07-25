@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 </head>
-<body>
+<body class="room-body">
 
   <!-- Top Navigation Bar -->
   <header class="navbar">
@@ -199,6 +199,26 @@
       </div>
     </section>
   </main>
+
+  <!-- Join Password Modal -->
+  <div class="modal-overlay" id="joinPasswordModal">
+    <div class="modal-card">
+      <h2 style="margin: 0 0 8px; font-size: 20px;" data-i18n="password_required">Password Required</h2>
+      <p style="margin: 0 0 16px; color: var(--md-on-surface-variant); font-size: 13px;" id="joinPasswordRoomName" data-i18n="room_locked">
+        This room is locked.
+      </p>
+      <form id="formJoinPassword" class="modal-body">
+        <div>
+          <label style="font-size: 12px; font-weight: 500;" data-i18n="room_password">Room password</label>
+          <input type="password" id="joinRoomPasswordInput" class="input-field" style="width: 100%; margin-top: 4px;" required minlength="4" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;" data-i18n="enter_room">Enter Room</button>
+      </form>
+      <div class="modal-footer" style="justify-content: center;">
+        <button class="btn btn-secondary" id="btnCloseJoinPassword" type="button" data-i18n="cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Auth Modal (Login / Register) -->
   <div class="modal-overlay" id="authModal">
