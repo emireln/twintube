@@ -691,6 +691,104 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			sendError(c, "permission_denied")
 		}
 
+	case "SUBMIT_MOMENT":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			AtSeconds *float64 `json:"atSeconds"`
+			Label     string   `json:"label"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		at := c.Room.GetCalculatedTime()
+		if payload.AtSeconds != nil {
+			at = *payload.AtSeconds
+		}
+		m, ok := c.Room.SubmitMoment(c, at, payload.Label)
+		if !ok {
+			sendError(c, "moment_not_allowed")
+			return
+		}
+		c.Room.PersistMoment(m)
+		c.Room.NotifyApproversPending(m)
+		rawAck, _ := json.Marshal(m)
+		select {
+		case c.Send <- room.WSMessage{Action: "MOMENT_SUBMITTED", Payload: rawAck}:
+		default:
+		}
+
+	case "APPROVE_MOMENT":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			MomentID string `json:"momentId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		m, ok := c.Room.ApproveMoment(c, payload.MomentID)
+		if !ok {
+			sendError(c, "permission_denied")
+			return
+		}
+		c.Room.PersistMomentStatus(m)
+		c.Room.BroadcastApprovedMoment(m)
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("Moment at %s approved.", formatMomentTime(m.AtSeconds)))
+
+	case "REJECT_MOMENT":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			MomentID string `json:"momentId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		m, ok := c.Room.RejectMoment(c, payload.MomentID)
+		if !ok {
+			sendError(c, "permission_denied")
+			return
+		}
+		c.Room.PersistMomentStatus(m)
+		raw, _ := json.Marshal(map[string]string{"momentId": m.ID})
+		c.Room.Broadcast <- room.WSMessage{Action: "MOMENT_REJECTED", Payload: raw}
+
+	case "JUMP_TO_MOMENT":
+		if c.Room == nil {
+			return
+		}
+		if !c.CanControlPlayback() {
+			sendError(c, "permission_denied")
+			return
+		}
+		var payload struct {
+			MomentID string `json:"momentId"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		m, ok := c.Room.FindMoment(payload.MomentID)
+		if !ok || m.Status != "approved" {
+			sendError(c, "moment_not_found")
+			return
+		}
+		state := c.Room.SnapshotState()
+		if m.VideoID != state.VideoID {
+			sendError(c, "moment_wrong_video")
+			return
+		}
+		c.Room.UpdateVideoState(state.VideoID, "PLAYING", m.AtSeconds, state.Title, room.MediaMeta{
+			Platform:  state.Platform,
+			MediaKind: state.MediaKind,
+			SourceURL: state.SourceURL,
+			Seekable:  state.Seekable,
+		})
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s jumped everyone to %s.", c.Nickname, formatMomentTime(m.AtSeconds)))
+
 	case "VIDEO_REACTION":
 		if c.Room == nil {
 			return
@@ -764,6 +862,16 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			Timestamp: nowMs,
 		}
 	}
+}
+
+func formatMomentTime(seconds float64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	total := int(seconds + 0.5)
+	m := total / 60
+	s := total % 60
+	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 func sendError(c *room.Client, message string) {

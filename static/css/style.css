@@ -1445,6 +1445,64 @@ body.theater-mode .player-wrapper {
   padding: 0 2px;
 }
 
+.moments-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid var(--md-outline);
+}
+
+.moments-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moments-approved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 4px;
+}
+
+.moment-chip {
+  border: 1px solid var(--md-outline);
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.moment-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.moments-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.moment-pending-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: var(--md-surface-variant);
+  border-radius: 8px;
+}
+
+.moment-pending-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .queue-thumb {
   width: 70px;
   height: 40px;

@@ -27,6 +27,8 @@ class TwinTubeApp {
     this.skipVotes = 0;
     this.skipNeeded = 1;
     this.hasSkipVoted = false;
+    this.approvedMoments = [];
+    this.pendingMoments = [];
     this.hasJoined = false;
     this.accessGranted = false;
     this.playlist = [];
@@ -282,6 +284,14 @@ class TwinTubeApp {
     if (btnQueueLock) {
       btnQueueLock.addEventListener('click', () => {
         this.ws.sendAction('SET_QUEUE_LOCK', { locked: !this.queueLocked });
+      });
+    }
+
+    const btnSaveMoment = document.getElementById('btnSaveMoment');
+    if (btnSaveMoment) {
+      btnSaveMoment.addEventListener('click', () => {
+        const atSeconds = this.player ? this.player.getCurrentTime() : 0;
+        this.ws.sendAction('SUBMIT_MOMENT', { atSeconds });
       });
     }
 
@@ -716,6 +726,16 @@ class TwinTubeApp {
     }
 
     this.renderQueue();
+    this.renderMomentsList();
+  }
+
+  renderMomentsList() {
+    this.ui.renderMoments(this.approvedMoments, this.pendingMoments, {
+      canControlPlayback: this.canControlPlayback,
+      onJump: (momentId) => this.ws.sendAction('JUMP_TO_MOMENT', { momentId }),
+      onApprove: (momentId) => this.ws.sendAction('APPROVE_MOMENT', { momentId }),
+      onReject: (momentId) => this.ws.sendAction('REJECT_MOMENT', { momentId })
+    });
   }
 
   initWebSocket() {
@@ -731,6 +751,8 @@ class TwinTubeApp {
       this.currentClientID = payload.clientId || '';
       this.playlist = payload.playlist || [];
       this.lastUsers = payload.users || [];
+      this.approvedMoments = payload.moments || [];
+      this.pendingMoments = payload.pendingMoments || [];
       this.applyRoleState(payload);
 
       if (payload.video) {
@@ -747,6 +769,7 @@ class TwinTubeApp {
 
       this.renderQueue();
       this.renderViewersList();
+      this.renderMomentsList();
     });
 
     this.ws.on('STATE_UPDATE', (payload, timestamp) => {
@@ -795,6 +818,34 @@ class TwinTubeApp {
         const btn = document.getElementById('btnVoteSkip');
         if (btn) btn.disabled = true;
       }
+    });
+
+    this.ws.on('MOMENT_SUBMITTED', () => {
+      this.ui.showToast(t('moment_submitted'));
+    });
+
+    this.ws.on('MOMENT_PENDING', (moment) => {
+      if (!moment || !moment.id) return;
+      if (!this.pendingMoments.find((m) => m.id === moment.id)) {
+        this.pendingMoments = [...this.pendingMoments, moment];
+      }
+      this.renderMomentsList();
+    });
+
+    this.ws.on('MOMENT_APPROVED', (moment) => {
+      if (!moment || !moment.id) return;
+      this.pendingMoments = this.pendingMoments.filter((m) => m.id !== moment.id);
+      if (!this.approvedMoments.find((m) => m.id === moment.id)) {
+        this.approvedMoments = [...this.approvedMoments, moment];
+      }
+      this.renderMomentsList();
+    });
+
+    this.ws.on('MOMENT_REJECTED', (payload) => {
+      const id = payload?.momentId;
+      if (!id) return;
+      this.pendingMoments = this.pendingMoments.filter((m) => m.id !== id);
+      this.renderMomentsList();
     });
 
     this.ws.on('VIDEO_REACTION', (payload) => {

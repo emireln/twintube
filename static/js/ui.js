@@ -751,4 +751,61 @@ export class UIManager {
       return map[match];
     });
   }
+
+  formatMomentClock(seconds) {
+    const total = Math.max(0, Math.round(Number(seconds) || 0));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  renderMoments(approved = [], pending = [], options = {}) {
+    const approvedEl = document.getElementById('momentsApproved');
+    const pendingEl = document.getElementById('momentsPending');
+    if (!approvedEl || !pendingEl) return;
+
+    const canControl = !!options.canControlPlayback;
+    const onJump = options.onJump || (() => {});
+    const onApprove = options.onApprove || (() => {});
+    const onReject = options.onReject || (() => {});
+
+    approvedEl.innerHTML = '';
+    approved.forEach((m) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'moment-chip';
+      chip.title = canControl ? t('jump_to_moment') : t('moment_host_only');
+      const label = m.label ? ` · ${this.escapeHTML(m.label)}` : '';
+      chip.innerHTML = `<span class="moment-time">${this.formatMomentClock(m.atSeconds)}</span>${label}`;
+      chip.addEventListener('click', () => {
+        if (!canControl) {
+          this.showToast(t('moment_host_only'));
+          return;
+        }
+        onJump(m.id);
+      });
+      approvedEl.appendChild(chip);
+    });
+
+    pendingEl.innerHTML = '';
+    if (!canControl || !pending.length) {
+      pendingEl.hidden = true;
+      return;
+    }
+    pendingEl.hidden = false;
+    pending.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'moment-pending-row';
+      row.innerHTML = `
+        <span>${this.escapeHTML(m.creatorNickname)} · ${this.formatMomentClock(m.atSeconds)}${m.label ? ` · ${this.escapeHTML(m.label)}` : ''}</span>
+        <span class="moment-pending-actions">
+          <button type="button" class="btn btn-primary btn-sm btn-approve">${t('approve_moment')}</button>
+          <button type="button" class="btn btn-secondary btn-sm btn-reject">${t('reject_moment')}</button>
+        </span>
+      `;
+      row.querySelector('.btn-approve').addEventListener('click', () => onApprove(m.id));
+      row.querySelector('.btn-reject').addEventListener('click', () => onReject(m.id));
+      pendingEl.appendChild(row);
+    });
+  }
 }

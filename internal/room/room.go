@@ -72,6 +72,7 @@ type Room struct {
 	State         VideoState
 	Clients       map[string]*Client
 	Playlist      []db.PlaylistItem
+	Moments       []Moment
 	QueueLocked   bool
 	SkipVotes     map[string]bool
 	SkipVideoID   string
@@ -153,6 +154,7 @@ func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 		},
 		Clients:       make(map[string]*Client),
 		Playlist:      make([]db.PlaylistItem, 0),
+		Moments:       make([]Moment, 0),
 		SkipVotes:     make(map[string]bool),
 		CohostUserIDs: make(map[string]bool),
 		Register:      make(chan *Client),
@@ -223,6 +225,23 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 					room.State.CurrentTime = rec.CurrentTime
 					if items, err := db.Database.LoadPlaylist(roomID); err == nil && len(items) > 0 {
 						room.Playlist = items
+					}
+					if moments, err := db.Database.LoadMoments(roomID); err == nil && len(moments) > 0 {
+						room.Moments = make([]Moment, 0, len(moments))
+						for _, row := range moments {
+							room.Moments = append(room.Moments, Moment{
+								ID:              row.ID,
+								RoomID:          row.RoomID,
+								CreatorUserID:   row.CreatorUserID,
+								CreatorNickname: row.CreatorNickname,
+								VideoID:         row.VideoID,
+								Platform:        row.Platform,
+								AtSeconds:       row.AtSeconds,
+								Label:           row.Label,
+								Status:          row.Status,
+								CreatedAt:       row.CreatedAt,
+							})
+						}
 					}
 				} else {
 					_ = db.Database.DeleteEphemeralRoomData(roomID)
@@ -409,6 +428,15 @@ func (r *Room) SendInitState(client *Client) {
 	copy(playlist, r.Playlist)
 
 	meta := r.roomMetaForClient(client)
+	approved := make([]Moment, 0)
+	pending := make([]Moment, 0)
+	for _, m := range r.Moments {
+		if m.Status == "approved" {
+			approved = append(approved, m)
+		} else if m.Status == "pending" && client.CanControlPlayback() {
+			pending = append(pending, m)
+		}
+	}
 
 	statePayload := map[string]interface{}{
 		"roomId":   r.ID,
@@ -437,6 +465,8 @@ func (r *Room) SendInitState(client *Client) {
 		},
 		"playlist": playlist,
 		"users":    r.getUserListUnsafe(),
+		"moments":  approved,
+		"pendingMoments": pending,
 	}
 
 	raw, _ := json.Marshal(statePayload)

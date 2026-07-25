@@ -173,6 +173,15 @@ const translations = {
     permission_denied: "You don't have permission for that.",
     queue_locked: "The queue is locked by the host.",
     invalid_queue_order: "Could not reorder the queue. Try again.",
+    save_moment: "Save moment",
+    approve_moment: "Approve",
+    reject_moment: "Reject",
+    jump_to_moment: "Jump everyone here",
+    moment_host_only: "Only the host or co-host can jump everyone to a moment.",
+    moment_submitted: "Moment submitted for approval.",
+    moment_not_allowed: "Moments aren't available for this media.",
+    moment_not_found: "That moment was not found.",
+    moment_wrong_video: "That moment belongs to a different video.",
     viewer_you: "(You)",
     guest_badge: "Guest",
     copy_link_btn: "Copy Link",
@@ -357,6 +366,15 @@ const translations = {
     permission_denied: "Você não tem permissão para isso.",
     queue_locked: "A fila está travada pelo anfitrião.",
     invalid_queue_order: "Não foi possível reordenar a fila. Tente de novo.",
+    save_moment: "Salvar momento",
+    approve_moment: "Aprovar",
+    reject_moment: "Recusar",
+    jump_to_moment: "Levar todos até aqui",
+    moment_host_only: "Só o anfitrião ou co-anfitrião pode saltar todos para um momento.",
+    moment_submitted: "Momento enviado para aprovação.",
+    moment_not_allowed: "Momentos não estão disponíveis para esta mídia.",
+    moment_not_found: "Momento não encontrado.",
+    moment_wrong_video: "Esse momento pertence a outro vídeo.",
     viewer_you: "(Você)",
     guest_badge: "Convidado",
     copy_link_btn: "Copiar Link",
@@ -440,7 +458,10 @@ const serverErrorToKey = {
   'Too many failed password attempts. Try again later.': 'too_many_attempts',
   permission_denied: 'permission_denied',
   queue_locked: 'queue_locked',
-  invalid_queue_order: 'invalid_queue_order'
+  invalid_queue_order: 'invalid_queue_order',
+  moment_not_allowed: 'moment_not_allowed',
+  moment_not_found: 'moment_not_found',
+  moment_wrong_video: 'moment_wrong_video'
 };
 
 export function translateError(message, fallbackKey = 'room_not_found') {

@@ -298,6 +298,39 @@ func (d *DB) migrateVideoIDColumns() error {
 	return d.migrateMediaColumns()
 }
 
+func (d *DB) ensureMomentsTable() error {
+	var q string
+	if d.dbType == DBTypePostgres {
+		q = `CREATE TABLE IF NOT EXISTS moments (
+			id VARCHAR(64) PRIMARY KEY,
+			room_id VARCHAR(64) NOT NULL,
+			creator_user_id VARCHAR(64) DEFAULT '',
+			creator_nickname VARCHAR(64) NOT NULL,
+			video_id TEXT NOT NULL,
+			platform TEXT DEFAULT '',
+			at_seconds DOUBLE PRECISION NOT NULL,
+			label TEXT DEFAULT '',
+			status VARCHAR(32) NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`
+	} else {
+		q = `CREATE TABLE IF NOT EXISTS moments (
+			id TEXT PRIMARY KEY,
+			room_id TEXT NOT NULL,
+			creator_user_id TEXT DEFAULT '',
+			creator_nickname TEXT NOT NULL,
+			video_id TEXT NOT NULL,
+			platform TEXT DEFAULT '',
+			at_seconds REAL NOT NULL,
+			label TEXT DEFAULT '',
+			status TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);`
+	}
+	_, err := d.db.Exec(q)
+	return err
+}
+
 func (d *DB) migrateMediaColumns() error {
 	alters := []string{
 		`ALTER TABLE playlist_items ADD COLUMN platform TEXT DEFAULT ''`,
@@ -322,7 +355,7 @@ func (d *DB) migrateMediaColumns() error {
 			log.Printf("[DB] migrateMediaColumns note: %v", err)
 		}
 	}
-	return nil
+	return d.ensureMomentsTable()
 }
 
 func (d *DB) CreateUser(u User) error {
@@ -572,6 +605,61 @@ func (d *DB) ReplacePlaylistPositions(roomID string, items []PlaylistItem) error
 	return tx.Commit()
 }
 
+type MomentRecord struct {
+	ID              string
+	RoomID          string
+	CreatorUserID   string
+	CreatorNickname string
+	VideoID         string
+	Platform        string
+	AtSeconds       float64
+	Label           string
+	Status          string
+	CreatedAt       time.Time
+}
+
+func (d *DB) SaveMoment(id, roomID, creatorUserID, creatorNickname, videoID, platform, label, status string, atSeconds float64, createdAt time.Time) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.roomIsOwnedLocked(roomID) {
+		return nil
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	query := d.Rebind(`INSERT INTO moments (id, room_id, creator_user_id, creator_nickname, video_id, platform, at_seconds, label, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`)
+	_, err := d.db.Exec(query, id, roomID, creatorUserID, creatorNickname, videoID, platform, atSeconds, label, status, createdAt)
+	return err
+}
+
+func (d *DB) UpdateMomentStatus(id, status string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	query := d.Rebind(`UPDATE moments SET status = ? WHERE id = ?;`)
+	_, err := d.db.Exec(query, status, id)
+	return err
+}
+
+func (d *DB) LoadMoments(roomID string) ([]MomentRecord, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	query := d.Rebind(`SELECT id, room_id, COALESCE(creator_user_id,''), creator_nickname, video_id, COALESCE(platform,''), at_seconds, COALESCE(label,''), status, created_at FROM moments WHERE room_id = ? AND status != 'rejected' ORDER BY created_at ASC;`)
+	rows, err := d.db.Query(query, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MomentRecord
+	for rows.Next() {
+		var m MomentRecord
+		if err := rows.Scan(&m.ID, &m.RoomID, &m.CreatorUserID, &m.CreatorNickname, &m.VideoID, &m.Platform, &m.AtSeconds, &m.Label, &m.Status, &m.CreatedAt); err != nil {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
 type RoomRecord struct {
 	ID             string     `db:"id"`
 	Name           string     `db:"name"`
@@ -668,6 +756,7 @@ func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
 	for _, q := range []string{
 		`DELETE FROM messages WHERE room_id = ?;`,
 		`DELETE FROM playlist_items WHERE room_id = ?;`,
+		`DELETE FROM moments WHERE room_id = ?;`,
 	} {
 		if _, err := d.db.Exec(d.Rebind(q), id); err != nil {
 			return err
@@ -694,6 +783,7 @@ func (d *DB) DeleteEphemeralRoomData(roomID string) error {
 	for _, q := range []string{
 		`DELETE FROM messages WHERE room_id = ?;`,
 		`DELETE FROM playlist_items WHERE room_id = ?;`,
+		`DELETE FROM moments WHERE room_id = ?;`,
 		`DELETE FROM rooms WHERE id = ? AND (owner_id = '' OR owner_id IS NULL);`,
 	} {
 		if _, err := d.db.Exec(d.Rebind(q), roomID); err != nil {
@@ -711,6 +801,7 @@ func (d *DB) CleanupOrphanRooms() error {
 	for _, q := range []string{
 		`DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE owner_id = '' OR owner_id IS NULL);`,
 		`DELETE FROM playlist_items WHERE room_id IN (SELECT id FROM rooms WHERE owner_id = '' OR owner_id IS NULL);`,
+		`DELETE FROM moments WHERE room_id IN (SELECT id FROM rooms WHERE owner_id = '' OR owner_id IS NULL);`,
 		`DELETE FROM rooms WHERE owner_id = '' OR owner_id IS NULL;`,
 	} {
 		if _, err := d.db.Exec(d.Rebind(q)); err != nil {
