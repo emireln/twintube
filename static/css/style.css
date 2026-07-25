@@ -232,10 +232,13 @@ body {
   color: var(--md-primary);
 }
 
-.coffee-btn,
 .landing-bmc-container,
 .bmc-landing-link {
   display: none !important;
+}
+
+.support-btn {
+  text-decoration: none;
 }
 
 /* User Profile & Dropdown */
