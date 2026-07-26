@@ -1,6 +1,6 @@
 {
   "name": "twintube-desktop",
-  "version": "1.0.31",
+  "version": "1.0.32",
   "description": "TwinTube Windows desktop client",
   "main": "main.js",
   "author": "emireln",
