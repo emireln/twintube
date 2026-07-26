@@ -700,11 +700,6 @@ class TwinTubeApp {
       this.canJumpMoment = !!(this.isHost || this.isCohost || this.permissions.anyoneJump);
     }
 
-    const hostBadge = document.getElementById('hostBadge');
-    if (hostBadge) hostBadge.style.display = this.isHost ? 'inline-flex' : 'none';
-    const cohostBadge = document.getElementById('cohostBadge');
-    if (cohostBadge) cohostBadge.style.display = (!this.isHost && this.isCohost) ? 'inline-flex' : 'none';
-
     const btnRoomPerms = document.getElementById('btnRoomPerms');
     if (btnRoomPerms) btnRoomPerms.hidden = !this.isHost;
 
@@ -896,8 +891,12 @@ class TwinTubeApp {
           btnToggle.setAttribute('aria-label', label);
           btnToggle.setAttribute('data-i18n-title', key);
           btnToggle.classList.toggle('is-active', !!status.joined);
-          const icon = btnToggle.querySelector('.material-symbols-outlined');
-          if (icon) icon.textContent = status.joined ? 'mic_off' : 'mic';
+          const mic = btnToggle.querySelector('.icon-mic');
+          const micOff = btnToggle.querySelector('.icon-mic-off');
+          if (mic && micOff) {
+            mic.style.display = status.joined ? 'none' : 'block';
+            micOff.style.display = status.joined ? 'block' : 'none';
+          }
         }
         if (btnPtt) {
           btnPtt.hidden = !status.joined;

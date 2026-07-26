@@ -2,30 +2,29 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <title>TwinTube - Watch Room</title>
   <meta name="description" content="Real-time synchronized video watching room.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
 </head>
 <body class="room-body">
 
   <!-- Mobile top chrome (phone / narrow tablet) -->
   <header class="mobile-room-bar" id="mobileRoomBar">
     <button type="button" class="tool-btn mobile-bar-btn" id="btnOpenRoomDrawer" data-i18n-title="open_menu" title="Menu" aria-label="Menu" aria-controls="roomNavbar" aria-expanded="false">
-      <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <a href="/" class="brand mobile-brand">
       <img src="/static/logo.svg" alt="TwinTube Logo" class="brand-icon-img">
       <span class="brand-wordmark">Twin<span class="accent">Tube</span></span>
     </a>
     <button type="button" class="mobile-room-code" id="btnMobileCopyRoom" hidden data-i18n-title="copy_link_title" title="Copy room link">
-      <span class="material-symbols-outlined" aria-hidden="true">link</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
       <code id="mobileRoomCodeText">--------</code>
     </button>
     <button type="button" class="tool-btn tool-btn-primary mobile-bar-btn" id="btnMobileOpenAdd" data-i18n-title="add_video" title="Add Video" aria-label="Add video">
-      <span class="material-symbols-outlined" aria-hidden="true">add</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
   </header>
 
@@ -39,77 +38,85 @@
         <span class="brand-wordmark">Twin<span class="accent">Tube</span></span>
       </a>
       <button type="button" class="tool-btn drawer-close-btn" id="btnCloseRoomDrawer" data-i18n-title="close" title="Close" aria-label="Close menu">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
 
-    <p class="drawer-section-label" data-i18n="drawer_add_video">Add video</p>
-    <form class="top-video-bar" id="topVideoForm">
-      <button type="button" class="tool-btn" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" aria-label="Choose file">
-        <span class="material-symbols-outlined" aria-hidden="true">folder_open</span>
-      </button>
-      <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
-      <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
-      <button type="submit" class="tool-btn tool-btn-primary" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video" aria-label="Add">
-        <span class="material-symbols-outlined" aria-hidden="true">add</span>
-      </button>
-    </form>
+    <section class="drawer-section">
+      <p class="drawer-section-label" data-i18n="drawer_add_video">Add video</p>
+      <form class="top-video-bar" id="topVideoForm">
+        <button type="button" class="tool-btn" id="btnAddLocalVideo" data-i18n-title="add_local_video" title="Add a local video file (stays on your device)" aria-label="Choose file">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <input type="text" id="topVideoInput" class="input-field top-input" data-i18n-ph="paste_video_placeholder" placeholder="Paste YouTube, Vimeo, Twitch URL…" required>
+        <input type="file" id="localVideoFileInput" accept="video/*,.mp4,.webm,.ogg,.mkv,.mov" hidden>
+        <button type="submit" class="tool-btn tool-btn-primary" id="btnAddVideoLink" data-i18n-title="add_video" title="Add Video" aria-label="Add">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </form>
+    </section>
 
-    <p class="drawer-section-label" data-i18n="drawer_room">Room</p>
-    <div class="nav-actions">
-      <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener noreferrer" class="nav-icon-btn support-btn room-bmc-btn" id="btnSupport" data-i18n-title="support_coffee" title="Support" aria-label="Buy Me a Coffee">
-        <img src="/static/bmc-logo.svg" alt="" class="bmc-logo-img" width="20" height="20">
-      </a>
+    <section class="drawer-section">
+      <p class="drawer-section-label" data-i18n="drawer_room">Room</p>
+      <div class="drawer-room-actions">
+        <button class="room-chip" id="btnCopyRoom" title="Click to Copy Room Link" style="display: none;" data-i18n-title="copy_link_title">
+          <span class="chip-label" data-i18n="room">Room:</span>
+          <code id="roomCodeText">--------</code>
+          <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg>
+        </button>
+        <button class="btn btn-secondary btn-nav" id="btnNewRoom" data-i18n-title="new_room_title" title="Create New Room">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span data-i18n="new_room">New Room</span>
+        </button>
+      </div>
+    </section>
 
-      <!-- Theme Toggle -->
-      <button class="nav-icon-btn" id="btnThemeToggle" data-i18n-title="theme_toggle" title="Toggle Light/Dark Theme">
-        <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
-        <svg class="icon-sun" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" style="display:none;"><path d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm113-170q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283-57q47-47 47-113t-47-113q-47-47-113-47t-113 47q-47 47-47 113t47 113q47 47 113 47t113-47ZM480-480Z"/></svg>
-      </button>
+    <section class="drawer-section">
+      <p class="drawer-section-label" data-i18n="drawer_prefs">Preferences</p>
+      <div class="drawer-quick-row">
+        <a href="https://buymeacoffee.com/emireln" target="_blank" rel="noopener noreferrer" class="nav-icon-btn support-btn room-bmc-btn" id="btnSupport" data-i18n-title="support_coffee" title="Support" aria-label="Buy Me a Coffee">
+          <img src="/static/bmc-logo.svg" alt="" class="bmc-logo-img" width="20" height="20">
+        </a>
+        <button class="nav-icon-btn" id="btnThemeToggle" data-i18n-title="theme_toggle" title="Toggle Light/Dark Theme">
+          <svg class="icon-moon" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z"/></svg>
+          <svg class="icon-sun" viewBox="0 -960 960 960" width="18" height="18" fill="currentColor" style="display:none;" aria-hidden="true"><path d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm113-170q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283-57q47-47 47-113t-47-113q-47-47-113-47t-113 47q-47 47-47 113t47 113q47 47 113 47t113-47ZM480-480Z"/></svg>
+        </button>
+      </div>
+    </section>
 
-      <!-- New Room Button -->
-      <button class="btn btn-secondary btn-nav" id="btnNewRoom" data-i18n-title="new_room_title" title="Create New Room">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span data-i18n="new_room">New Room</span>
-      </button>
-
-      <!-- Room Code Badge & Copy Link Button Container -->
-      <button class="room-chip" id="btnCopyRoom" title="Click to Copy Room Link" style="display: none;" data-i18n-title="copy_link_title">
-        <span class="chip-label" data-i18n="room">Room:</span>
-        <code id="roomCodeText">--------</code>
-        <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg>
-      </button>
-
-      <!-- User Auth Section -->
-      <div id="authNavContainer">
-        <button class="btn btn-primary btn-nav" id="btnOpenAuth" data-i18n="sign_in">Sign In</button>
-        <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
-          <button class="user-avatar-btn" id="btnUserMenu">
-            <img id="userAvatarImg" class="user-avatar-img" alt="" hidden>
-            <span id="userAvatarText">U</span>
-          </button>
-          <div class="dropdown-menu" id="profileDropdown">
-            <div class="dropdown-header">
-              <strong id="dropdownUsername">Username</strong>
-              <small id="dropdownEmail">user@example.com</small>
+    <section class="drawer-section drawer-section-account">
+      <p class="drawer-section-label" data-i18n="drawer_account">Account</p>
+      <div class="nav-actions">
+        <div id="authNavContainer">
+          <button class="btn btn-primary btn-nav" id="btnOpenAuth" data-i18n="sign_in">Sign In</button>
+          <div class="user-profile-menu" id="userProfileMenu" style="display: none;">
+            <button class="user-avatar-btn" id="btnUserMenu">
+              <img id="userAvatarImg" class="user-avatar-img" alt="" hidden>
+              <span id="userAvatarText">U</span>
+            </button>
+            <div class="dropdown-menu" id="profileDropdown">
+              <div class="dropdown-header">
+                <strong id="dropdownUsername">Username</strong>
+                <small id="dropdownEmail">user@example.com</small>
+              </div>
+              <hr>
+              <button class="dropdown-item" id="btnMyRooms">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span data-i18n="my_rooms">My Rooms</span>
+              </button>
+              <button class="dropdown-item" id="btnSettings">
+                <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg>
+                <span data-i18n="settings">Settings</span>
+              </button>
+              <button class="dropdown-item" id="btnLogout">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <span data-i18n="sign_out">Sign Out</span>
+              </button>
             </div>
-            <hr>
-            <button class="dropdown-item" id="btnMyRooms">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              <span data-i18n="my_rooms">My Rooms</span>
-            </button>
-            <button class="dropdown-item" id="btnSettings">
-              <svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg>
-              <span data-i18n="settings">Settings</span>
-            </button>
-            <button class="dropdown-item" id="btnLogout">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              <span data-i18n="sign_out">Sign Out</span>
-            </button>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   </header>
 
   <!-- Main Grid App Body -->
@@ -148,7 +155,7 @@
         <!-- Empty player (host cleared video / no media) -->
         <div class="empty-player-overlay" id="emptyPlayerOverlay" hidden>
           <div class="empty-player-card">
-            <span class="material-symbols-outlined empty-player-icon" aria-hidden="true">play_circle</span>
+            <svg class="empty-player-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>
             <h3 class="empty-player-title" data-i18n="empty_player_title">No video playing</h3>
             <p class="empty-player-desc" data-i18n="empty_player_desc">Paste a link above or add a local file to start watching together.</p>
           </div>
@@ -186,7 +193,7 @@
             </button>
           </div>
           <button type="button" class="tool-btn reaction-launch" id="btnReactions" data-i18n-title="reactions" title="Reactions" aria-label="Reactions" aria-expanded="false" aria-controls="reactionTray">
-            <span class="material-symbols-outlined" aria-hidden="true">mood</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
           </button>
         </div>
       </div>
@@ -204,40 +211,34 @@
               <span class="badge-dot"></span>
               <span data-i18n="live_badge">LIVE</span>
             </span>
-            <span class="badge badge-host" id="hostBadge" style="display: none;">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
-              <span data-i18n="host_badge">Host</span>
-            </span>
-            <span class="badge badge-cohost" id="cohostBadge" style="display: none;">
-              <span data-i18n="cohost_badge">Co-host</span>
-            </span>
           </div>
         </div>
 
         <div class="player-controls-meta" role="toolbar" aria-label="Room controls">
           <div class="control-cluster" id="voiceControls">
             <button type="button" class="tool-btn" id="btnVoiceToggle" data-i18n-title="voice_join" title="Join voice" aria-label="Join voice">
-              <span class="material-symbols-outlined" aria-hidden="true">mic</span>
+              <svg class="icon-mic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              <svg class="icon-mic-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display:none;" aria-hidden="true"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             </button>
             <button type="button" class="tool-btn tool-btn-accent" id="btnPushToTalk" hidden data-i18n-title="push_to_talk" title="Hold to talk" aria-label="Hold to talk">
-              <span class="material-symbols-outlined" aria-hidden="true">keyboard_voice</span>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             </button>
           </div>
 
           <div class="control-divider" aria-hidden="true"></div>
 
           <button type="button" class="tool-btn" id="btnResync" data-i18n-title="resync_title" title="Force Sync to Server Position" aria-label="Resync">
-            <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
           <button type="button" class="tool-btn" id="btnTheaterMode" data-i18n-title="theater_mode" title="Toggle Theater Mode" aria-label="Theater mode">
-            <span class="material-symbols-outlined" aria-hidden="true">crop_16_9</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2H7"/></svg>
           </button>
           <button type="button" class="tool-btn moments-launch" id="btnMoments" data-i18n-title="moments" title="Moments" aria-label="Moments" aria-expanded="false" aria-controls="momentsPanel">
-            <span class="material-symbols-outlined" aria-hidden="true">bookmarks</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             <span class="tool-count" id="momentsCount" hidden>0</span>
           </button>
           <button type="button" class="tool-btn" id="btnRoomPerms" hidden data-i18n-title="room_permissions" title="Room permissions" aria-label="Room permissions">
-            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
           </button>
         </div>
 
@@ -248,7 +249,7 @@
               <span data-i18n="moments_hint">Jump back to saved highlights</span>
             </div>
             <button type="button" class="btn btn-primary moments-save-btn" id="btnSaveMoment" data-i18n-title="save_moment" title="Save moment" aria-label="Save moment">
-              <span class="material-symbols-outlined" aria-hidden="true">bookmark_add</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
               <span data-i18n="save_moment">Save moment</span>
             </button>
           </header>
@@ -327,16 +328,16 @@
   <!-- Mobile bottom tabs -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Room sections">
     <button type="button" class="mobile-nav-btn tab-btn active" data-tab="chatTab">
-      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span data-i18n="chat_tab">Chat</span>
     </button>
     <button type="button" class="mobile-nav-btn tab-btn" data-tab="queueTab">
-      <span class="material-symbols-outlined" aria-hidden="true">playlist_play</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       <span data-i18n="queue_tab">Queue</span>
       <span class="mobile-nav-badge" id="mobileQueueBadge">0</span>
     </button>
     <button type="button" class="mobile-nav-btn tab-btn" data-tab="viewersTab">
-      <span class="material-symbols-outlined" aria-hidden="true">group</span>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span data-i18n="viewers_tab">Viewers</span>
       <span class="mobile-nav-badge" id="mobileViewersBadge">1</span>
     </button>
@@ -357,7 +358,8 @@
           <div class="password-field" style="margin-top: 4px;">
             <input type="password" id="joinRoomPasswordInput" class="input-field" required minlength="4" autocomplete="current-password">
             <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
-              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <svg class="icon-visibility" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-visibility-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display:none;" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
         </div>
@@ -433,7 +435,8 @@
           <div class="password-field" style="margin-top: 4px;">
             <input type="password" id="loginPass" class="input-field" required autocomplete="current-password">
             <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
-              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <svg class="icon-visibility" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-visibility-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display:none;" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
         </div>
@@ -455,7 +458,8 @@
           <div class="password-field" style="margin-top: 4px;">
             <input type="password" id="regPass" class="input-field" required minlength="6" autocomplete="new-password">
             <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
-              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <svg class="icon-visibility" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-visibility-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display:none;" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
         </div>
@@ -464,7 +468,8 @@
           <div class="password-field" style="margin-top: 4px;">
             <input type="password" id="regPassConfirm" class="input-field" required minlength="6" autocomplete="new-password">
             <button type="button" class="password-toggle" data-i18n-title="show_password" title="Show password" aria-label="Show password">
-              <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+              <svg class="icon-visibility" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-visibility-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display:none;" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             </button>
           </div>
         </div>
@@ -625,6 +630,6 @@
   <!-- Client JavaScript Modules -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script type="module" src="/static/js/app.js?v=1.0.29"></script>
+  <script type="module" src="/static/js/app.js?v=1.0.30"></script>
 </body>
 </html>

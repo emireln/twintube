@@ -24,6 +24,7 @@ export class UIManager {
     this.initTheme();
     this.initTabs();
     this.initMobileRoomChrome();
+    this.initMobileKeyboardLayout();
     this.initSettingsLangPicker();
     this.initSettings();
     this.initPasswordVisibility();
@@ -42,8 +43,15 @@ export class UIManager {
         btn.title = label;
         btn.setAttribute('aria-label', label);
         btn.setAttribute('data-i18n-title', visible ? 'hide_password' : 'show_password');
-        const icon = btn.querySelector('.material-symbols-outlined');
-        if (icon) icon.textContent = visible ? 'visibility_off' : 'visibility';
+        const on = btn.querySelector('.icon-visibility');
+        const off = btn.querySelector('.icon-visibility-off');
+        if (on && off) {
+          on.style.display = visible ? 'none' : 'block';
+          off.style.display = visible ? 'block' : 'none';
+        } else {
+          const icon = btn.querySelector('.material-symbols-outlined');
+          if (icon) icon.textContent = visible ? 'visibility_off' : 'visibility';
+        }
       };
 
       btn.addEventListener('click', () => {
@@ -663,6 +671,57 @@ export class UIManager {
     });
 
     this.closeRoomDrawer = close;
+  }
+
+  // Keep chat composer above the soft keyboard on mobile Safari/Chrome.
+  initMobileKeyboardLayout() {
+    const chatInput = document.getElementById('chatInput');
+    const topInput = document.getElementById('topVideoInput');
+    if (!chatInput && !topInput) return;
+
+    const root = document.documentElement;
+    const mq = window.matchMedia('(max-width: 900px)');
+
+    const syncKeyboardInset = () => {
+      if (!mq.matches || !window.visualViewport) {
+        root.style.setProperty('--keyboard-inset', '0px');
+        return;
+      }
+      const vv = window.visualViewport;
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      root.style.setProperty('--keyboard-inset', `${inset}px`);
+    };
+
+    const setChatOpen = (open) => {
+      document.body.classList.toggle('chat-keyboard-open', open && mq.matches);
+      syncKeyboardInset();
+      if (!open) {
+        root.style.setProperty('--keyboard-inset', '0px');
+      }
+    };
+
+    chatInput?.addEventListener('focus', () => setChatOpen(true));
+    chatInput?.addEventListener('blur', () => {
+      // Delay so tap-to-send can fire before the composer unsticks.
+      setTimeout(() => {
+        if (document.activeElement !== chatInput) setChatOpen(false);
+      }, 120);
+    });
+
+    topInput?.addEventListener('focus', () => {
+      if (mq.matches) syncKeyboardInset();
+    });
+    topInput?.addEventListener('blur', () => {
+      if (!document.body.classList.contains('chat-keyboard-open')) {
+        root.style.setProperty('--keyboard-inset', '0px');
+      }
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncKeyboardInset);
+      window.visualViewport.addEventListener('scroll', syncKeyboardInset);
+    }
+    window.addEventListener('resize', syncKeyboardInset);
   }
 
   // Toast Notifications
