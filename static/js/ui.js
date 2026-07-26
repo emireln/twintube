@@ -3,13 +3,16 @@ import { getLanguage, getLanguageLabel, setLanguage, updateDOMTranslations, t } 
 function queueThumbUrl(item) {
   if (item.thumbnailUrl) return item.thumbnailUrl;
   const id = item.videoId || '';
-  if (id.startsWith('local:') || id.startsWith('http://') || id.startsWith('https://')) {
-    return '/static/favicon.svg';
+  if (id.startsWith('local:')) {
+    return '/static/icons/local-video.svg';
+  }
+  if (id.startsWith('http://') || id.startsWith('https://')) {
+    return '/static/icons/local-video.svg';
   }
   if (/^[a-zA-Z0-9_-]{11}$/.test(id)) {
     return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
   }
-  return '/static/favicon.svg';
+  return '/static/icons/local-video.svg';
 }
 
 export class UIManager {

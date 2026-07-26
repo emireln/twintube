@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 48" fill="none" role="img" aria-label="Local video">
+  <rect width="80" height="48" rx="6" fill="#1a1d27"/>
+  <rect x="1" y="1" width="78" height="46" rx="5" stroke="#3a4055" stroke-width="1"/>
+  <!-- video file body -->
+  <rect x="22" y="10" width="28" height="28" rx="4" fill="#2a2f42"/>
+  <path d="M46 14h4.5L54 17.5V34a2 2 0 0 1-2 2H46V14z" fill="#353b52"/>
+  <!-- play triangle -->
+  <path d="M33.5 19.2v9.6L41.2 24l-7.7-4.8z" fill="#8b8dff"/>
+</svg>

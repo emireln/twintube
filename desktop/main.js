@@ -30,7 +30,10 @@ function assetPath(name) {
 }
 
 function createWindow() {
-  const winIcon = nativeImage.createFromPath(assetPath('icon.png'));
+  // Prefer multi-size .ico so Windows taskbar / title-bar stay sharp; PNG is a fallback.
+  const ico = nativeImage.createFromPath(assetPath('icon.ico'));
+  const png = nativeImage.createFromPath(assetPath('icon.png'));
+  const winIcon = !ico.isEmpty() ? ico : png;
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,

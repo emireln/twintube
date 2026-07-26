@@ -40,6 +40,10 @@
         "to": "tray.ico"
       },
       {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      },
+      {
         "from": "assets/icon.png",
         "to": "icon.png"
       }
@@ -53,7 +57,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.ico",
       "artifactName": "TwinTube-Setup-${version}.${ext}",
       "publish": [
         {
@@ -69,9 +73,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "TwinTube",
-      "installerIcon": "assets/tray.ico",
-      "uninstallerIcon": "assets/tray.ico",
-      "installerHeaderIcon": "assets/tray.ico",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "installerSidebar": "assets/installerSidebar.bmp",
       "uninstallerSidebar": "assets/uninstallerSidebar.bmp",
       "deleteAppDataOnUninstall": false
