@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TwinTube Update</title>
+  <link rel="stylesheet" href="update-overlay.css">
+</head>
+<body>
+  <div class="backdrop" role="presentation">
+    <section class="card" role="dialog" aria-modal="true" aria-labelledby="updateTitle" aria-describedby="updateBody">
+      <div class="card-head">
+        <div class="icon-wrap" id="updateIcon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
+        <div class="card-copy">
+          <h1 id="updateTitle">Update available</h1>
+          <p id="updateBody">A new version is ready.</p>
+          <span class="version-pill hidden" id="updateVersion"></span>
+        </div>
+      </div>
+
+      <div class="progress-block hidden" id="progressBlock">
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progressLabel">Downloading…</span>
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+
+      <div class="actions hidden" id="actionsBlock">
+        <button type="button" class="btn btn-secondary hidden" id="btnSecondary">Later</button>
+        <button type="button" class="btn btn-primary" id="btnPrimary">Download</button>
+      </div>
+    </section>
+  </div>
+  <script src="update-overlay.js"></script>
+</body>
+</html>

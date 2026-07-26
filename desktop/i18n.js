@@ -7,15 +7,18 @@ const STRINGS = {
     quit: 'Quit',
     update_available_title: 'Update available',
     update_available_body: 'TwinTube {version} is ready to download.',
-    update_download: 'Download',
+    update_download: 'Download update',
     update_downloading_title: 'Downloading update',
-    update_downloading_body: 'Downloading TwinTube {version}…',
+    update_downloading_body: 'TwinTube {version} is downloading in the background.',
+    update_progress_label: 'Download progress',
     update_ready_title: 'Update ready',
-    update_ready_body: 'TwinTube {version} has been downloaded. Restart now to apply the update?',
+    update_ready_body: 'TwinTube {version} is downloaded. Restart now to install it.',
     update_restart: 'Restart now',
     update_later: 'Later',
+    update_dismiss: 'OK',
     update_error_title: 'Update failed',
-    update_error_body: 'Could not check for updates. You can keep using TwinTube.'
+    update_error_check: 'Could not check for updates. You can keep using TwinTube.',
+    update_error_download: 'Could not download the update. Try again later.'
   },
   pt: {
     show: 'Mostrar TwinTube',
@@ -23,15 +26,18 @@ const STRINGS = {
     quit: 'Sair',
     update_available_title: 'Atualização disponível',
     update_available_body: 'O TwinTube {version} está pronto para baixar.',
-    update_download: 'Baixar',
+    update_download: 'Baixar atualização',
     update_downloading_title: 'Baixando atualização',
-    update_downloading_body: 'Baixando TwinTube {version}…',
+    update_downloading_body: 'O TwinTube {version} está sendo baixado em segundo plano.',
+    update_progress_label: 'Progresso do download',
     update_ready_title: 'Atualização pronta',
-    update_ready_body: 'O TwinTube {version} foi baixado. Reiniciar agora para aplicar a atualização?',
+    update_ready_body: 'O TwinTube {version} foi baixado. Reinicie agora para instalar.',
     update_restart: 'Reiniciar agora',
     update_later: 'Depois',
+    update_dismiss: 'OK',
     update_error_title: 'Falha na atualização',
-    update_error_body: 'Não foi possível verificar atualizações. Você pode continuar usando o TwinTube.'
+    update_error_check: 'Não foi possível verificar atualizações. Você pode continuar usando o TwinTube.',
+    update_error_download: 'Não foi possível baixar a atualização. Tente novamente mais tarde.'
   }
 };
 
@@ -59,4 +65,4 @@ function t(key, vars = {}, lang = detectLang()) {
   return text;
 }
 
-module.exports = { detectLang, t, normalizeLang };
+module.exports = { detectLang, t, normalizeLang, STRINGS };

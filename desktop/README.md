@@ -2,6 +2,10 @@
 
 Windows client that wraps https://twintube.site with tray + auto-update.
 
+## Updates
+
+The desktop app uses a Material-style in-app overlay for update prompts (available, download progress, ready to restart, and errors) with English and Portuguese strings in `i18n.js`. Updates are fetched only from HTTPS (`https://twintube.site/downloads`).
+
 ## Develop
 
 ```bash

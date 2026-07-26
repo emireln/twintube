@@ -1,0 +1,220 @@
+:root {
+  --md-primary: #5c5cff;
+  --md-primary-hover: #4848e6;
+  --md-primary-container: #ededff;
+  --md-on-primary: #ffffff;
+  --md-on-primary-container: #12124a;
+  --md-surface: #ffffff;
+  --md-surface-variant: #f4f5f7;
+  --md-on-surface: #1f2328;
+  --md-on-surface-variant: #656d76;
+  --md-outline: #e1e4e8;
+  --md-shadow-3: 0 8px 24px rgba(31, 35, 40, 0.16);
+  --font-main: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-brand: 'Segoe UI', 'Outfit', Roboto, sans-serif;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+}
+
+[data-theme='dark'] {
+  --md-primary: #5c5cff;
+  --md-primary-hover: #7070ff;
+  --md-primary-container: #1e1e4a;
+  --md-on-primary: #ffffff;
+  --md-on-primary-container: #d8d8ff;
+  --md-surface: #1c1d21;
+  --md-surface-variant: #26282e;
+  --md-on-surface: #f0f2f5;
+  --md-on-surface-variant: #9da5b4;
+  --md-outline: #333740;
+  --md-shadow-3: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-main);
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(18, 19, 22, 0.45);
+}
+
+.card {
+  width: min(100%, 400px);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--md-shadow-3);
+  padding: 22px 22px 18px;
+  animation: card-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--md-primary-container);
+  color: var(--md-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-wrap.is-error {
+  background: rgba(207, 34, 46, 0.12);
+  color: #cf222e;
+}
+
+.icon-wrap svg {
+  width: 24px;
+  height: 24px;
+}
+
+.card-copy h1 {
+  margin: 0 0 6px;
+  font-family: var(--font-brand);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.card-copy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--md-on-surface-variant);
+}
+
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.progress-block {
+  margin: 14px 0 4px;
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--md-surface-variant);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--md-primary), #7a7aff);
+  transition: width 0.18s ease;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 0 18px;
+  min-height: 38px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--md-on-surface-variant);
+}
+
+.btn-secondary:hover {
+  background: var(--md-surface-variant);
+  color: var(--md-on-surface);
+}
+
+.btn-primary {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+
+.btn-primary:hover {
+  background: var(--md-primary-hover);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.hidden {
+  display: none !important;
+}

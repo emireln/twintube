@@ -4,13 +4,14 @@ const {
   Tray,
   Menu,
   shell,
-  dialog,
+  session,
   nativeImage
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const { detectLang, t } = require('./i18n');
+const { UpdateUI } = require('./update-ui');
 
 const APP_URL = process.env.TWINTUBE_DESKTOP_URL || 'https://twintube.site/?desktop=1';
 const UPDATE_FEED = process.env.TWINTUBE_UPDATE_URL || 'https://twintube.site/downloads';
@@ -19,6 +20,15 @@ let mainWindow = null;
 let tray = null;
 let lang = detectLang();
 let updatePromptOpen = false;
+let updateUI = null;
+
+function assertSecureOrigin(urlString, label) {
+  if (!app.isPackaged) return;
+  const url = new URL(urlString);
+  if (url.protocol !== 'https:') {
+    throw new Error(`${label} must use HTTPS in production`);
+  }
+}
 
 function assetPath(name) {
   if (app.isPackaged) {
@@ -29,11 +39,27 @@ function assetPath(name) {
   return path.join(__dirname, 'assets', name);
 }
 
+function hardenWebContents(contents) {
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+  if (app.isPackaged) {
+    contents.on('devtools-opened', () => contents.closeDevTools());
+  }
+}
+
+function configureSession() {
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+  ses.setPermissionCheckHandler(() => false);
+  ses.setDevicePermissionHandler(() => false);
+}
+
 function createWindow() {
-  // Prefer multi-size .ico so Windows taskbar / title-bar stay sharp; PNG is a fallback.
   const ico = nativeImage.createFromPath(assetPath('icon.ico'));
   const png = nativeImage.createFromPath(assetPath('icon.png'));
   const winIcon = !ico.isEmpty() ? ico : png;
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -49,9 +75,14 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      devTools: !app.isPackaged,
       spellcheck: false
     }
   });
+
+  hardenWebContents(mainWindow.webContents);
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow) mainWindow.show();
@@ -124,11 +155,24 @@ function createTray() {
   });
 }
 
+function getUpdateUI() {
+  if (!updateUI) {
+    updateUI = new UpdateUI({
+      getParentWindow: () => mainWindow,
+      getLang: () => lang,
+      translate: t
+    });
+  }
+  return updateUI;
+}
+
 function setupAutoUpdater() {
   if (!app.isPackaged) {
     console.log('[desktop] Skipping auto-updater in development.');
     return;
   }
+
+  const ui = getUpdateUI();
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -141,58 +185,57 @@ function setupAutoUpdater() {
     if (updatePromptOpen) return;
     updatePromptOpen = true;
     const version = info?.version || '';
-    const result = await dialog.showMessageBox(mainWindow || undefined, {
-      type: 'info',
-      buttons: [t('update_download', {}, lang), t('update_later', {}, lang)],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update_available_title', {}, lang),
-      message: t('update_available_body', { version }, lang)
-    });
-    updatePromptOpen = false;
-    if (result.response === 0) {
-      try {
+    try {
+      const action = await ui.promptAvailable(version);
+      if (action === 'download') {
+        await ui.showDownloading(version);
         await autoUpdater.downloadUpdate();
-      } catch (err) {
-        console.error('[desktop] Download failed:', err);
       }
+    } catch (err) {
+      console.error('[desktop] Download failed:', err);
+      await ui.showError('update_error_download');
+    } finally {
+      updatePromptOpen = false;
     }
   });
 
-  autoUpdater.on('download-progress', () => {
-    // Progress is handled silently; dialog appears when ready.
+  autoUpdater.on('download-progress', (progress) => {
+    const pct = progress?.percent ?? 0;
+    ui.updateProgress(pct);
   });
 
   autoUpdater.on('update-downloaded', async (info) => {
     if (updatePromptOpen) return;
     updatePromptOpen = true;
     const version = info?.version || '';
-    const result = await dialog.showMessageBox(mainWindow || undefined, {
-      type: 'info',
-      buttons: [t('update_restart', {}, lang), t('update_later', {}, lang)],
-      defaultId: 0,
-      cancelId: 1,
-      title: t('update_ready_title', {}, lang),
-      message: t('update_ready_body', { version }, lang)
-    });
-    updatePromptOpen = false;
-    if (result.response === 0) {
-      app.isQuiting = true;
-      autoUpdater.quitAndInstall(false, true);
+    try {
+      const action = await ui.promptReady(version);
+      if (action === 'restart') {
+        app.isQuiting = true;
+        autoUpdater.quitAndInstall(false, true);
+      }
+    } finally {
+      updatePromptOpen = false;
     }
   });
 
-  autoUpdater.on('error', (err) => {
+  autoUpdater.on('error', async (err) => {
     console.error('[desktop] Updater error:', err);
+    if (!updatePromptOpen) return;
+    updatePromptOpen = true;
+    try {
+      await ui.showError('update_error_check');
+    } finally {
+      updatePromptOpen = false;
+    }
   });
 
   const checkUpdates = () => {
-    autoUpdater.checkForUpdates().catch((err) => {
+    autoUpdater.checkForUpdates().catch(async (err) => {
       console.warn('[desktop] Update check failed:', err?.message || err);
     });
   };
 
-  // Check shortly after launch, then periodically while the app stays open.
   setTimeout(checkUpdates, 4000);
   setInterval(checkUpdates, 6 * 60 * 60 * 1000);
 }
@@ -209,7 +252,22 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    try {
+      assertSecureOrigin(APP_URL, 'APP_URL');
+      assertSecureOrigin(UPDATE_FEED, 'UPDATE_FEED');
+    } catch (err) {
+      console.error('[desktop] Security configuration error:', err.message);
+      app.quit();
+      return;
+    }
+
+    configureSession();
     lang = detectLang();
+
+    app.on('web-contents-created', (_event, contents) => {
+      hardenWebContents(contents);
+    });
+
     createWindow();
     createTray();
     setupAutoUpdater();
@@ -217,10 +275,12 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     app.isQuiting = true;
+    if (updateUI) updateUI.close();
   });
 
   app.on('window-all-closed', (e) => {
-    // Keep tray app alive on Windows/Linux until explicit quit.
     e.preventDefault();
   });
 }
+
+module.exports = { APP_URL, UPDATE_FEED };
