@@ -22,4 +22,11 @@ PATCH=$((PATCH + 1))
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
 echo "$NEW_VERSION" > "$VERSION_FILE"
+
+# Keep the Electron package version aligned so local + CI builds match VERSION.
+if [[ -f "$ROOT/scripts/sync-desktop-version.sh" ]]; then
+  chmod +x "$ROOT/scripts/sync-desktop-version.sh"
+  "$ROOT/scripts/sync-desktop-version.sh" >/dev/null
+fi
+
 echo "$NEW_VERSION"

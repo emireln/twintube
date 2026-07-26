@@ -128,6 +128,19 @@ func main() {
 	http.Handle("/downloads/", security.Middleware(http.StripPrefix("/downloads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Encourage resumable downloads for large installers.
 		w.Header().Set("Accept-Ranges", "bytes")
+		name := strings.ToLower(filepath.Base(r.URL.Path))
+		switch {
+		case strings.HasSuffix(name, ".yml"), strings.HasSuffix(name, ".yaml"):
+			// electron-updater reads latest.yml — keep it fresh and typed as YAML.
+			w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		case strings.HasSuffix(name, ".exe"):
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Cache-Control", "public, max-age=300")
+		case strings.HasSuffix(name, ".blockmap"):
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Cache-Control", "public, max-age=300")
+		}
 		downloadsFS.ServeHTTP(w, r)
 	}))))
 

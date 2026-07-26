@@ -186,11 +186,15 @@ function setupAutoUpdater() {
     console.error('[desktop] Updater error:', err);
   });
 
-  setTimeout(() => {
+  const checkUpdates = () => {
     autoUpdater.checkForUpdates().catch((err) => {
       console.warn('[desktop] Update check failed:', err?.message || err);
     });
-  }, 4000);
+  };
+
+  // Check shortly after launch, then periodically while the app stays open.
+  setTimeout(checkUpdates, 4000);
+  setInterval(checkUpdates, 6 * 60 * 60 * 1000);
 }
 
 const gotLock = app.requestSingleInstanceLock();
