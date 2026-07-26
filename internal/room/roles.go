@@ -166,6 +166,52 @@ func (r *Room) restoreCohostOnJoinLocked(client *Client) {
 	}
 }
 
+// assignHostLocked makes next the sole host (or clears host if next is nil).
+// Caller must hold r.mu.
+func (r *Room) assignHostLocked(next *Client) {
+	for _, c := range r.Clients {
+		c.IsHost = false
+	}
+	if next == nil {
+		r.HostID = ""
+		return
+	}
+	r.HostID = next.ID
+	next.IsHost = true
+	next.IsCohost = false
+	if next.UserID != "" && r.CohostUserIDs != nil {
+		delete(r.CohostUserIDs, next.UserID)
+	}
+}
+
+// reconcileHostLocked ensures HostID points at a live client and only that
+// client has IsHost=true. Caller must hold r.mu.
+func (r *Room) reconcileHostLocked() *Client {
+	if r.HostID != "" {
+		if c, ok := r.Clients[r.HostID]; ok {
+			r.assignHostLocked(c)
+			return c
+		}
+		r.HostID = ""
+	}
+	var marked *Client
+	for _, c := range r.Clients {
+		if !c.IsHost {
+			continue
+		}
+		if marked == nil || c.JoinedAt.Before(marked.JoinedAt) {
+			marked = c
+		}
+	}
+	if marked != nil {
+		r.assignHostLocked(marked)
+		return marked
+	}
+	next := r.promoteNewHostLocked()
+	r.assignHostLocked(next)
+	return next
+}
+
 func (r *Room) promoteNewHostLocked() *Client {
 	var bestCohost *Client
 	for _, c := range r.Clients {
@@ -201,11 +247,11 @@ func (r *Room) GrantCohost(from *Client, targetClientID string) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if from == nil || !from.IsHost {
+	if from == nil || !from.IsHost || from.ID != r.HostID {
 		return "", false
 	}
 	target, ok := r.Clients[targetClientID]
-	if !ok || target.IsHost {
+	if !ok || target.IsHost || target.ID == from.ID {
 		return "", false
 	}
 	target.IsCohost = true
@@ -222,11 +268,11 @@ func (r *Room) RevokeCohost(from *Client, targetClientID string) (string, bool) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if from == nil || !from.IsHost {
+	if from == nil || !from.IsHost || from.ID != r.HostID {
 		return "", false
 	}
 	target, ok := r.Clients[targetClientID]
-	if !ok {
+	if !ok || target.IsHost {
 		return "", false
 	}
 	target.IsCohost = false
@@ -328,19 +374,24 @@ func (r *Room) renumberPlaylistLocked() {
 
 func (r *Room) BroadcastRoomMeta() {
 	r.mu.Lock()
-	votes, needed, _ := r.skipTallyLocked()
-	perms := r.Permissions
+	type targeted struct {
+		id  string
+		raw json.RawMessage
+	}
+	out := make([]targeted, 0, len(r.Clients))
+	for _, c := range r.Clients {
+		meta := r.roomMetaForClient(c)
+		raw, _ := json.Marshal(meta)
+		out = append(out, targeted{id: c.ID, raw: raw})
+	}
 	r.mu.Unlock()
 
-	raw, _ := json.Marshal(map[string]interface{}{
-		"skipVotes":   votes,
-		"skipNeeded":  needed,
-		"permissions": perms,
-	})
-	r.deliver(WSMessage{
-		Action:  "ROOM_META",
-		Payload: raw,
-	})
+	for _, item := range out {
+		r.SendTo(item.id, WSMessage{
+			Action:  "ROOM_META",
+			Payload: item.raw,
+		})
+	}
 }
 
 func (r *Room) SendCorrectiveState(client *Client) {
@@ -374,7 +425,9 @@ func (r *Room) roomMetaForClient(client *Client) map[string]interface{} {
 		"skipVotes":          votes,
 		"skipNeeded":         needed,
 		"hasSkipVoted":       voted[client.ID],
+		"isHost":             client.IsHost,
 		"isCohost":           client.IsCohost,
+		"hostId":             r.HostID,
 		"canControlPlayback": r.clientCanPlaybackLocked(client),
 		"canModerateQueue":   r.clientCanModQueueLocked(client),
 		"canAddQueue":        r.clientCanAddQueueLocked(client),

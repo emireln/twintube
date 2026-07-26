@@ -321,13 +321,23 @@ func (r *Room) Run() {
 			if client.JoinedAt.IsZero() {
 				client.JoinedAt = time.Now()
 			}
+			client.IsHost = false
 			r.Clients[client.ID] = client
 			r.restoreCohostOnJoinLocked(client)
 
-			if r.HostID == "" {
-				r.HostID = client.ID
-				client.IsHost = true
-				client.IsCohost = false
+			hostAlert := ""
+			ownerReclaim := r.OwnerID != "" && client.UserID != "" && client.UserID == r.OwnerID
+			if ownerReclaim {
+				prevHostID := r.HostID
+				r.assignHostLocked(client)
+				if prevHostID != "" && prevHostID != client.ID {
+					hostAlert = client.Nickname + " reclaimed Host as the room owner."
+				}
+			} else {
+				r.reconcileHostLocked()
+				if r.HostID == "" {
+					r.assignHostLocked(client)
+				}
 			}
 			r.mu.Unlock()
 
@@ -339,6 +349,9 @@ func (r *Room) Run() {
 			}
 			// deliver() directly — never send on Broadcast from inside Run (deadlock)
 			r.BroadcastSystemAlert(client.Nickname + userType + " joined the room.")
+			if hostAlert != "" {
+				r.BroadcastSystemAlert(hostAlert)
+			}
 			r.BroadcastUserList()
 			r.BroadcastRoomMeta()
 			r.SendInitState(client)
@@ -362,14 +375,15 @@ func (r *Room) Run() {
 
 				log.Printf("[ROOM %s] Client left: %s", r.ID, client.Nickname)
 
-				if client.ID == r.HostID {
+				wasHost := client.ID == r.HostID || client.IsHost
+				client.IsHost = false
+				if wasHost {
 					r.HostID = ""
-					if next := r.promoteNewHostLocked(); next != nil {
-						r.HostID = next.ID
-						next.IsHost = true
-						next.IsCohost = false
+					if next := r.reconcileHostLocked(); next != nil {
 						newHostAlert = next.Nickname + " is now the Host."
 					}
+				} else {
+					r.reconcileHostLocked()
 				}
 
 				if len(r.Clients) == 0 && r.OwnerID == "" {
@@ -794,21 +808,15 @@ func (r *Room) TransferHost(from *Client, targetClientID string) (targetNickname
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if !from.IsHost {
+	if from == nil || !from.IsHost || from.ID != r.HostID {
 		return "", false
 	}
 
 	target, exists := r.Clients[targetClientID]
-	if !exists {
+	if !exists || target.ID == from.ID {
 		return "", false
 	}
 
-	from.IsHost = false
-	r.HostID = target.ID
-	target.IsHost = true
-	target.IsCohost = false
-	if target.UserID != "" && r.CohostUserIDs != nil {
-		delete(r.CohostUserIDs, target.UserID)
-	}
+	r.assignHostLocked(target)
 	return target.Nickname, true
 }

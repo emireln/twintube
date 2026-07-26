@@ -60,3 +60,49 @@ func TestPromotePrefersCohost(t *testing.T) {
 		t.Fatalf("expected cohost promotion, got %#v", next)
 	}
 }
+
+func TestAssignHostClearsOthers(t *testing.T) {
+	r := Manager.newRoomShell("host2", "Host")
+	a := &Client{ID: "a", Nickname: "A", IsHost: true, JoinedAt: time.Now().Add(-time.Minute)}
+	b := &Client{ID: "b", Nickname: "B", IsCohost: true, JoinedAt: time.Now()}
+	r.Clients[a.ID] = a
+	r.Clients[b.ID] = b
+	r.HostID = a.ID
+	r.assignHostLocked(b)
+	if r.HostID != b.ID || !b.IsHost || a.IsHost || b.IsCohost {
+		t.Fatalf("assignHost failed: host=%s a.host=%v b.host=%v b.cohost=%v", r.HostID, a.IsHost, b.IsHost, b.IsCohost)
+	}
+}
+
+func TestTransferHostRequiresCurrentHost(t *testing.T) {
+	r := Manager.newRoomShell("host3", "Host")
+	host := &Client{ID: "h", Nickname: "Host", IsHost: true, JoinedAt: time.Now().Add(-time.Minute)}
+	guest := &Client{ID: "g", Nickname: "Guest", JoinedAt: time.Now()}
+	r.Clients[host.ID] = host
+	r.Clients[guest.ID] = guest
+	r.HostID = host.ID
+
+	if _, ok := r.TransferHost(guest, host.ID); ok {
+		t.Fatal("guest must not transfer host")
+	}
+	if nick, ok := r.TransferHost(host, guest.ID); !ok || nick != "Guest" {
+		t.Fatalf("host transfer failed: nick=%s ok=%v", nick, ok)
+	}
+	if r.HostID != guest.ID || !guest.IsHost || host.IsHost {
+		t.Fatalf("after transfer: host=%s guest.host=%v host.host=%v", r.HostID, guest.IsHost, host.IsHost)
+	}
+}
+
+func TestOwnerReclaimWinsOverGuestHost(t *testing.T) {
+	r := Manager.newRoomShell("host4", "Owned")
+	r.OwnerID = "owner-user"
+	guest := &Client{ID: "g", Nickname: "Guest", IsHost: true, JoinedAt: time.Now().Add(-time.Minute)}
+	owner := &Client{ID: "o", Nickname: "Owner", UserID: "owner-user", JoinedAt: time.Now()}
+	r.Clients[guest.ID] = guest
+	r.HostID = guest.ID
+	r.Clients[owner.ID] = owner
+	r.assignHostLocked(owner)
+	if r.HostID != owner.ID || !owner.IsHost || guest.IsHost {
+		t.Fatalf("owner reclaim failed: host=%s owner.host=%v guest.host=%v", r.HostID, owner.IsHost, guest.IsHost)
+	}
+}

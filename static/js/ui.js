@@ -933,11 +933,11 @@ export class UIManager {
 
       let roleActions = '';
       if (isHost && !user.isHost && !isYou) {
-        roleActions += `<button class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">${t('make_host')}</button>`;
+        roleActions += `<button type="button" class="btn btn-secondary btn-transfer" style="font-size: 11px; padding: 4px 10px;">${t('make_host')}</button>`;
         if (user.isCohost) {
-          roleActions += `<button class="btn btn-secondary btn-revoke-cohost" style="font-size: 11px; padding: 4px 10px;">${t('remove_cohost')}</button>`;
+          roleActions += `<button type="button" class="btn btn-secondary btn-revoke-cohost" style="font-size: 11px; padding: 4px 10px;">${t('remove_cohost')}</button>`;
         } else {
-          roleActions += `<button class="btn btn-secondary btn-grant-cohost" style="font-size: 11px; padding: 4px 10px;">${t('make_cohost')}</button>`;
+          roleActions += `<button type="button" class="btn btn-secondary btn-grant-cohost" style="font-size: 11px; padding: 4px 10px;">${t('make_cohost')}</button>`;
         }
       }
 

@@ -681,10 +681,12 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 
-		if targetNick, ok := c.Room.TransferHost(c, payload.TargetClientID); ok {
-			c.Room.BroadcastSystemAlert(fmt.Sprintf("%s transferred Host status to %s.", c.Nickname, targetNick))
+		targetNick, ok := c.Room.TransferHost(c, payload.TargetClientID)
+		if !ok {
+			sendError(c, "permission_denied")
+			return
 		}
-
+		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s transferred Host status to %s.", c.Nickname, targetNick))
 		c.Room.BroadcastUserList()
 		c.Room.BroadcastRoomMeta()
 

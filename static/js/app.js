@@ -646,14 +646,28 @@ class TwinTubeApp {
     const readyCount = localActive
       ? this.lastUsers.filter(u => u.localFileReady).length
       : 0;
+    const me = this.lastUsers.find((u) => u.id === this.currentClientID);
+    const canManageRoles = !!(this.isHost && me?.isHost);
     this.ui.renderViewers(
       this.lastUsers,
       this.currentClientID,
       {
-        isHost: this.isHost,
-        onTransferHost: (targetId) => this.ws.sendAction('TRANSFER_HOST', { targetId }),
-        onGrantCohost: (targetId) => this.ws.sendAction('GRANT_COHOST', { targetId }),
-        onRevokeCohost: (targetId) => this.ws.sendAction('REVOKE_COHOST', { targetId }),
+        isHost: canManageRoles,
+        onTransferHost: (targetId) => {
+          if (!canManageRoles) return;
+          const target = this.lastUsers.find((u) => u.id === targetId);
+          const name = target?.nickname || '';
+          if (!window.confirm(t('confirm_make_host', { name }))) return;
+          this.ws.sendAction('TRANSFER_HOST', { targetId });
+        },
+        onGrantCohost: (targetId) => {
+          if (!canManageRoles) return;
+          this.ws.sendAction('GRANT_COHOST', { targetId });
+        },
+        onRevokeCohost: (targetId) => {
+          if (!canManageRoles) return;
+          this.ws.sendAction('REVOKE_COHOST', { targetId });
+        },
         localVideoActive: localActive,
         readyCount,
         totalCount: this.lastUsers.length
@@ -662,16 +676,27 @@ class TwinTubeApp {
   }
 
   applyRoleState(payload = {}) {
-    if (typeof payload.isHost === 'boolean') this.isHost = payload.isHost;
-    if (typeof payload.isCohost === 'boolean') this.isCohost = payload.isCohost;
     if (payload.permissions && typeof payload.permissions === 'object') {
       this.permissions = { ...this.permissions, ...payload.permissions };
     }
 
     const me = this.lastUsers.find((u) => u.id === this.currentClientID);
     if (me) {
+      // Authoritative: role flags from the live user list.
       this.isHost = !!me.isHost;
-      this.isCohost = !!me.isCohost;
+      this.isCohost = !!me.isCohost && !me.isHost;
+    } else if (typeof payload.isHost === 'boolean' || typeof payload.isCohost === 'boolean') {
+      if (typeof payload.isHost === 'boolean') this.isHost = payload.isHost;
+      if (typeof payload.isCohost === 'boolean') this.isCohost = payload.isCohost && !this.isHost;
+    } else if (this.lastUsers.length > 0) {
+      // User list arrived before we know our client id — never assume host powers.
+      this.isHost = false;
+      this.isCohost = false;
+    }
+
+    if (typeof payload.hostId === 'string' && payload.hostId && this.currentClientID) {
+      this.isHost = payload.hostId === this.currentClientID;
+      if (this.isHost) this.isCohost = false;
     }
 
     if (typeof payload.canControlPlayback === 'boolean') {
@@ -1067,7 +1092,12 @@ class TwinTubeApp {
     });
 
     this.ws.on('ROOM_META', (payload) => {
+      const wasHost = this.isHost;
       this.applyRoleState(payload || {});
+      if (wasHost !== this.isHost) {
+        this.renderViewersList();
+        this.renderMomentsList();
+      }
     });
 
     this.ws.on('MOMENT_SUBMITTED', () => {
