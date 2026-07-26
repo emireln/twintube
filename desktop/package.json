@@ -72,6 +72,8 @@
       "installerIcon": "assets/tray.ico",
       "uninstallerIcon": "assets/tray.ico",
       "installerHeaderIcon": "assets/tray.ico",
+      "installerSidebar": "assets/installerSidebar.bmp",
+      "uninstallerSidebar": "assets/uninstallerSidebar.bmp",
       "deleteAppDataOnUninstall": false
     },
     "publish": [
