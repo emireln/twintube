@@ -15,8 +15,10 @@ services:
       PORT: "8080"
       APP_DOMAIN: twintube.site
       DOWNLOADS_DIR: /downloads
+      AVATARS_DIR: /uploads/avatars
     volumes:
       - ../downloads:/downloads:ro
+      - ../uploads/avatars:/uploads/avatars
     depends_on:
       postgres:
         condition: service_healthy

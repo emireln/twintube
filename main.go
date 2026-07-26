@@ -83,6 +83,18 @@ func main() {
 	http.HandleFunc("/api/auth/me", security.Wrap(auth.HandleGetMe))
 	http.HandleFunc("/api/auth/profile", security.Wrap(auth.HandleUpdateProfile))
 	http.HandleFunc("/api/auth/password", security.Wrap(auth.HandleChangePassword))
+	http.HandleFunc("/api/auth/avatar", security.Wrap(authLimiter.Middleware(auth.HandleUploadAvatar)))
+
+	// User-uploaded avatars (persistent volume recommended in production)
+	avatarsDir := strings.TrimSpace(os.Getenv("AVATARS_DIR"))
+	if avatarsDir == "" {
+		avatarsDir = filepath.Join(".", "uploads", "avatars")
+	}
+	if err := os.MkdirAll(avatarsDir, 0o755); err != nil {
+		log.Printf("[SERVER] Warning: could not create avatars dir %s: %v", avatarsDir, err)
+	}
+	avatarsFS := http.FileServer(http.Dir(avatarsDir))
+	http.Handle("/uploads/avatars/", security.Middleware(http.StripPrefix("/uploads/avatars/", avatarsFS)))
 
 	// API Room & Metadata Routes
 	http.HandleFunc("/api/youtube/info", security.Wrap(handleVideoInfo))

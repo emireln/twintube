@@ -557,11 +557,14 @@
             <div class="settings-avatar-fields">
               <label class="settings-label" data-i18n="display_name">Display name</label>
               <input type="text" id="settingProfileUsername" class="input-field" maxlength="25">
-              <label class="settings-label" data-i18n="avatar_url">Avatar image URL</label>
-              <div class="profile-avatar-url-row">
-                <input type="url" id="settingProfileAvatar" class="input-field" placeholder="https://...">
+              <label class="settings-label" data-i18n="avatar_photo">Profile photo</label>
+              <div class="profile-avatar-actions">
+                <button type="button" class="btn btn-secondary btn-compact" id="btnUploadAvatar" data-i18n="avatar_upload">Upload image</button>
                 <button type="button" class="btn btn-secondary btn-compact" id="btnRandomAvatar" data-i18n="avatar_randomize">Randomize</button>
+                <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif" hidden>
               </div>
+              <label class="settings-label settings-label-muted" data-i18n="avatar_url_optional">Or paste image URL</label>
+              <input type="url" id="settingProfileAvatar" class="input-field" placeholder="https://..." data-i18n-ph="avatar_url_ph">
             </div>
           </div>
           <div class="settings-actions">

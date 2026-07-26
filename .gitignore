@@ -13,6 +13,12 @@ desktop/dist/
 downloads/*
 !downloads/.gitkeep
 
+# User-uploaded avatars
+uploads/
+!uploads/avatars/
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
 # Database files
 *.db
 *.sqlite

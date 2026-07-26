@@ -118,6 +118,8 @@ export class UIManager {
     const btnSaveEmail = document.getElementById('btnSaveEmail');
     const btnChangePassword = document.getElementById('btnChangePassword');
     const btnRandomAvatar = document.getElementById('btnRandomAvatar');
+    const btnUploadAvatar = document.getElementById('btnUploadAvatar');
+    const avatarFileInput = document.getElementById('avatarFileInput');
 
     if (btnClose) {
       btnClose.addEventListener('click', () => {
@@ -126,15 +128,57 @@ export class UIManager {
       });
     }
 
+    const setAvatarPreview = (url) => {
+      const avatarInput = document.getElementById('settingProfileAvatar');
+      const preview = document.getElementById('settingProfileAvatarPreview');
+      if (avatarInput) avatarInput.value = url || '';
+      if (preview) {
+        preview.src = url || '';
+        preview.hidden = !url;
+      }
+    };
+
     if (btnRandomAvatar) {
       btnRandomAvatar.addEventListener('click', () => {
         const username = document.getElementById('settingProfileUsername')?.value.trim() || 'user';
         const seed = username + '_' + Math.random().toString(36).slice(2, 8);
-        const url = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
-        const avatarInput = document.getElementById('settingProfileAvatar');
-        const preview = document.getElementById('settingProfileAvatarPreview');
-        if (avatarInput) avatarInput.value = url;
-        if (preview) preview.src = url;
+        // PNG renders reliably on mobile; SVG often overflows circular crops.
+        const url = `https://api.dicebear.com/7.x/bottts/png?size=128&seed=${encodeURIComponent(seed)}`;
+        setAvatarPreview(url);
+      });
+    }
+
+    if (btnUploadAvatar && avatarFileInput) {
+      btnUploadAvatar.addEventListener('click', () => avatarFileInput.click());
+      avatarFileInput.addEventListener('change', async () => {
+        const file = avatarFileInput.files?.[0];
+        avatarFileInput.value = '';
+        if (!file) return;
+        const auth = this.settingsAuth;
+        if (!auth?.isLoggedIn()) {
+          this.showToast(t('profile_login_hint'));
+          return;
+        }
+        if (!file.type.startsWith('image/')) {
+          this.showToast(t('avatar_upload_invalid'));
+          return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+          this.showToast(t('avatar_upload_too_large'));
+          return;
+        }
+        btnUploadAvatar.disabled = true;
+        try {
+          await auth.uploadAvatar(file);
+          const user = auth.getUser();
+          setAvatarPreview(user?.avatarUrl || '');
+          this.updateUserNavUI(auth);
+          this.showToast(t('avatar_uploaded'));
+        } catch (err) {
+          this.showToast(err.message || t('avatar_upload_fail'));
+        } finally {
+          btnUploadAvatar.disabled = false;
+        }
       });
     }
 
@@ -247,7 +291,8 @@ export class UIManager {
     if (avatarInput && avatarPreview) {
       avatarInput.addEventListener('input', () => {
         const url = avatarInput.value.trim();
-        if (url) avatarPreview.src = url;
+        avatarPreview.src = url || '';
+        avatarPreview.hidden = !url;
       });
       avatarPreview.addEventListener('error', () => {
         avatarPreview.src = '';
@@ -294,6 +339,7 @@ export class UIManager {
     if (previewEl) {
       previewEl.src = user.avatarUrl || '';
       previewEl.alt = user.username || '';
+      previewEl.hidden = !user.avatarUrl;
     }
 
     ['settingCurrentPassword', 'settingNewPassword', 'settingConfirmPassword'].forEach(id => {

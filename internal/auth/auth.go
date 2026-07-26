@@ -3,8 +3,11 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -161,7 +164,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request) {
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
-		AvatarURL:    fmt.Sprintf("https://api.dicebear.com/7.x/bottts/svg?seed=%s", req.Username),
+		AvatarURL:    defaultAvatarURL(req.Username),
 		CreatedAt:    time.Now(),
 	}
 
@@ -309,11 +312,22 @@ func isValidAvatarURL(raw string) bool {
 	if raw == "" {
 		return true
 	}
-	if len(raw) > 500 {
+	if len(raw) > 2048 {
 		return false
 	}
 	lower := strings.ToLower(raw)
-	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return true
+	}
+	// Uploaded avatars served from this host
+	if strings.HasPrefix(lower, "/uploads/avatars/") {
+		return !strings.Contains(raw, "..")
+	}
+	return false
+}
+
+func defaultAvatarURL(username string) string {
+	return fmt.Sprintf("https://api.dicebear.com/7.x/bottts/png?size=128&seed=%s", url.QueryEscape(username))
 }
 
 func HandleUpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -350,12 +364,12 @@ func HandleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isValidAvatarURL(req.AvatarURL) {
-		writeJSONError(w, "Avatar URL must be a valid http(s) link", http.StatusBadRequest)
+		writeJSONError(w, "Avatar must be an http(s) link or an uploaded image", http.StatusBadRequest)
 		return
 	}
 
 	if req.AvatarURL == "" {
-		req.AvatarURL = fmt.Sprintf("https://api.dicebear.com/7.x/bottts/svg?seed=%s", req.Username)
+		req.AvatarURL = defaultAvatarURL(req.Username)
 	}
 
 	taken, err := db.Database.IsUsernameOrEmailTaken(req.Username, req.Email, user.ID)
@@ -439,4 +453,114 @@ func HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Password updated"})
+}
+
+const maxAvatarBytes = 2 << 20 // 2 MiB
+
+func avatarsDir() string {
+	dir := strings.TrimSpace(os.Getenv("AVATARS_DIR"))
+	if dir == "" {
+		dir = filepath.Join(".", "uploads", "avatars")
+	}
+	return dir
+}
+
+func detectImageExt(header []byte) (string, string, bool) {
+	ctype := http.DetectContentType(header)
+	switch ctype {
+	case "image/jpeg":
+		return ".jpg", ctype, true
+	case "image/png":
+		return ".png", ctype, true
+	case "image/gif":
+		return ".gif", ctype, true
+	case "image/webp":
+		return ".webp", ctype, true
+	default:
+		return "", ctype, false
+	}
+}
+
+// HandleUploadAvatar accepts a multipart image and stores it under /uploads/avatars/.
+func HandleUploadAvatar(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	_, user, err := userFromRequest(r)
+	if err != nil {
+		writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAvatarBytes+512)
+	if err := r.ParseMultipartForm(maxAvatarBytes); err != nil {
+		writeJSONError(w, "Image must be 2 MB or smaller", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("avatar")
+	if err != nil {
+		writeJSONError(w, "Choose an image file to upload", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	head = head[:n]
+	ext, _, ok := detectImageExt(head)
+	if !ok {
+		writeJSONError(w, "Only JPEG, PNG, WebP, or GIF images are allowed", http.StatusBadRequest)
+		return
+	}
+
+	dir := avatarsDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		writeJSONError(w, "Failed to prepare avatar storage", http.StatusInternalServerError)
+		return
+	}
+
+	// Remove previous uploads for this user (any extension).
+	for _, oldExt := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp"} {
+		_ = os.Remove(filepath.Join(dir, user.ID+oldExt))
+	}
+
+	filename := user.ID + ext
+	destPath := filepath.Join(dir, filename)
+	out, err := os.Create(destPath)
+	if err != nil {
+		writeJSONError(w, "Failed to save avatar", http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	if _, err := out.Write(head); err != nil {
+		writeJSONError(w, "Failed to save avatar", http.StatusInternalServerError)
+		return
+	}
+	if _, err := io.Copy(out, file); err != nil {
+		writeJSONError(w, "Failed to save avatar", http.StatusInternalServerError)
+		return
+	}
+
+	avatarURL := fmt.Sprintf("/uploads/avatars/%s?v=%d", filename, time.Now().Unix())
+	if err := db.Database.UpdateUserProfile(user.ID, user.Username, user.Email, avatarURL); err != nil {
+		writeJSONError(w, "Failed to update profile", http.StatusInternalServerError)
+		return
+	}
+	user.AvatarURL = avatarURL
+
+	token, err := GenerateJWTToken(user.ID, user.Username)
+	if err != nil {
+		writeJSONError(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token: token,
+		User:  *user,
+	})
 }

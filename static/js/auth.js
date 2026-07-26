@@ -91,6 +91,36 @@ export class AuthManager {
     return data;
   }
 
+  async uploadAvatar(file) {
+    if (!this.token) {
+      throw new Error('Not signed in');
+    }
+    const form = new FormData();
+    form.append('avatar', file);
+    const resp = await fetch('/api/auth/avatar', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.token}` },
+      body: form
+    });
+    let data = {};
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = {};
+    }
+    if (!resp.ok) {
+      throw new Error(data.error || `Failed to upload avatar (${resp.status})`);
+    }
+    if (data.token && data.user) {
+      this.setAuthData(data.token, data.user);
+    } else if (data.user) {
+      this.user = data.user;
+      localStorage.setItem('twintube_user', JSON.stringify(data.user));
+      this.notifyListeners();
+    }
+    return data;
+  }
+
   async changePassword(currentPassword, newPassword) {
     if (!this.token) {
       throw new Error('Not signed in');
