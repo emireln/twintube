@@ -10,6 +10,8 @@ Welcome to the **TwinTube** project repository! This document provides technical
 
 Rooms are **fully open by default**. Hosts can tighten permissions (playback, add/mod queue, moments, jump) via `SET_ROOM_PERMISSIONS`.
 
+**Guest rooms** (no signed-in owner) are in-memory only. When the last viewer leaves, the room stays joinable for **15 minutes** (`GuestRoomGracePeriod` in `internal/room/room.go`); rejoining cancels the timer. Signed-in rooms persist to the DB for 7 days.
+
 ---
 
 ## Technology Stack & Architecture
@@ -80,8 +82,14 @@ twintube/
 | Action | Direction | Purpose |
 |--------|-----------|---------|
 | `JOIN_ROOM` | C→S | `{roomId, nickname, token?, joinToken?}` |
+| `JOIN_PRESENCE` | C→S | `{token}` — logged-in landing/background alerts (no room join) |
 | `INIT_STATE` | S→C | Snapshot: video, playlist, users, roles, permissions, moments |
-| `CHAT_MESSAGE` | C↔S | User chat (`avatarUrl`) / system alerts (`isSystem`) |
+| `CHAT_MESSAGE` | C↔S | `{content, replyToId?, videoTime?}` → message with `id`, `mentions`, reply preview |
+| `CHAT_REACTION` | C→S | `{messageId, emoji, videoTime?}` toggle emoji on a chat line |
+| `CHAT_REACTION_UPDATE` | S→C | `{messageId, reactions, emoji, added, clientId}` |
+| `HYPE_BURST` | S→C | `{emoji, videoTime, count, label}` when many react at same timestamp |
+| `MENTION_NOTIFY` | S→C | `{roomId, messageId, from, content}` targeted @mention alert |
+| `COWATCHER_ROOM` | S→C | `{roomId, roomName, hostNickname, url}` co-watcher started a room |
 | `CHAT_HISTORY` | S→C | Last N messages (oldest→newest) with avatars when known |
 | `ADD_QUEUE` | C→S | `{url, title?}` → parse → append |
 | `QUEUE_UPDATE` | S→C | Full playlist |

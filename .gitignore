@@ -19,6 +19,13 @@ uploads/*
 uploads/avatars/*
 !uploads/avatars/.gitkeep
 
+# Environment files
+.env
+.env.local
+
+# Local dev runtime (start/stop scripts)
+.local/
+
 # Database files
 *.db
 *.sqlite

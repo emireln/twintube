@@ -763,33 +763,273 @@ export class UIManager {
   hideAuthModal() { this.hideModal('authModal'); }
 
   // Chat Rendering
+  static CHAT_REACTION_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '🍿', '👏', '😮', '💀', '✨'];
+
+  setupChatHandlers(handlers = {}) {
+    this.chatHandlers = handlers;
+  }
+
+  setChatClientId(clientId) {
+    this.myClientId = clientId || '';
+  }
+
+  clearChatMessages() {
+    const container = document.getElementById('chatMessages');
+    if (container) container.innerHTML = '';
+  }
+
+  formatChatContent(content, mentions = []) {
+    const escaped = this.escapeHTML(content || '');
+    const mentionSet = new Set((mentions || []).map((m) => m.toLowerCase()));
+    return escaped.replace(/@([A-Za-z0-9_\-.]{1,25})/g, (match, nick) => {
+      if (mentionSet.has(nick.toLowerCase())) {
+        return `<span class="msg-mention">${match}</span>`;
+      }
+      return match;
+    });
+  }
+
   renderChatMessage(msg) {
     const container = document.getElementById('chatMessages');
-    if (!container) return;
+    if (!container || !msg) return;
 
     const el = document.createElement('div');
-    
+
     if (msg.isSystem) {
       el.className = 'msg-system';
       el.textContent = msg.content;
     } else {
       el.className = 'msg-item';
+      el.dataset.messageId = msg.id || '';
       const initial = (msg.nickname || 'G').charAt(0).toUpperCase();
+      const replyBlock = msg.replyToId ? `
+        <div class="msg-reply-quote">
+          <span class="msg-reply-author">${this.escapeHTML(msg.replyToNick || '')}</span>
+          <span class="msg-reply-text">${this.escapeHTML(msg.replyToText || '')}</span>
+        </div>` : '';
+      const videoTag = msg.videoTime != null && msg.videoTime >= 0
+        ? `<span class="msg-video-time" title="${t('jump_to_moment')}">${this.escapeHTML(this.formatVideoTime(msg.videoTime))}</span>`
+        : '';
+      const reactionsHTML = this.renderReactionBarHTML(msg.id, msg.reactions || {});
+
       el.innerHTML = `
         ${this.avatarHTML(msg.avatarUrl, initial)}
         <div class="msg-body">
           <div class="msg-header">
             <span class="msg-author">${this.escapeHTML(msg.nickname)}</span>
             <span class="msg-time">${msg.timestamp || ''}</span>
+            ${videoTag}
           </div>
-          <div class="msg-text">${this.escapeHTML(msg.content)}</div>
+          ${replyBlock}
+          <div class="msg-content-stack">
+            <div class="msg-actions">
+              <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
+              <button type="button" class="msg-action-btn btn-msg-react" title="${t('chat_react')}">${t('chat_react')}</button>
+            </div>
+            <div class="msg-text">${this.formatChatContent(msg.content, msg.mentions)}</div>
+            ${reactionsHTML}
+          </div>
         </div>
       `;
       this.bindAvatarFallback(el);
+      this.bindChatMessageActions(el, msg);
     }
 
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;
+  }
+
+  formatVideoTime(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    if (mins > 0) return `${mins}:${String(secs).padStart(2, '0')}`;
+    return `0:${String(secs).padStart(2, '0')}`;
+  }
+
+  renderReactionBarHTML(messageId, reactions) {
+    const entries = Object.entries(reactions || {}).filter(([, count]) => count > 0);
+    if (!entries.length) {
+      return `<div class="msg-reactions" data-message-id="${this.escapeHTML(messageId || '')}"></div>`;
+    }
+    const chips = entries.map(([emoji, count]) =>
+      `<button type="button" class="msg-reaction-chip" data-emoji="${emoji}">${emoji}<span>${count}</span></button>`
+    ).join('');
+    return `<div class="msg-reactions" data-message-id="${this.escapeHTML(messageId || '')}">${chips}</div>`;
+  }
+
+  bindChatMessageActions(el, msg) {
+    const replyBtn = el.querySelector('.btn-msg-reply');
+    if (replyBtn) {
+      replyBtn.addEventListener('click', () => {
+        if (this.chatHandlers.onReply) {
+          this.chatHandlers.onReply({
+            id: msg.id,
+            nickname: msg.nickname,
+            content: msg.content
+          });
+        }
+      });
+    }
+
+    const reactBtn = el.querySelector('.btn-msg-react');
+    if (reactBtn) {
+      reactBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleReactionPicker(el, msg.id);
+      });
+    }
+
+    el.querySelectorAll('.msg-reaction-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const emoji = chip.dataset.emoji;
+        if (emoji && this.chatHandlers.onReact) {
+          this.chatHandlers.onReact(msg.id, emoji);
+        }
+      });
+    });
+
+    const timeEl = el.querySelector('.msg-video-time');
+    if (timeEl && msg.videoTime != null && this.chatHandlers.onJumpTime) {
+      timeEl.addEventListener('click', () => this.chatHandlers.onJumpTime(msg.videoTime));
+    }
+  }
+
+  toggleReactionPicker(msgEl, messageId) {
+    document.querySelectorAll('.msg-reaction-picker').forEach((p) => p.remove());
+    const picker = document.createElement('div');
+    picker.className = 'msg-reaction-picker';
+    picker.innerHTML = UIManager.CHAT_REACTION_EMOJIS.map((emoji) =>
+      `<button type="button" class="msg-reaction-option" data-emoji="${emoji}">${emoji}</button>`
+    ).join('');
+    msgEl.querySelector('.msg-content-stack')?.appendChild(picker);
+
+    picker.querySelectorAll('.msg-reaction-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (this.chatHandlers.onReact) {
+          this.chatHandlers.onReact(messageId, btn.dataset.emoji);
+        }
+        picker.remove();
+      });
+    });
+
+    const close = (ev) => {
+      if (!picker.contains(ev.target)) {
+        picker.remove();
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+
+  updateChatReactions(messageId, reactions) {
+    const esc = (id) => (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(id) : String(id).replace(/"/g, '\\"');
+    const bar = document.querySelector(`.msg-reactions[data-message-id="${esc(messageId)}"]`);
+    if (!bar) return;
+    const parent = bar.closest('.msg-item');
+    bar.outerHTML = this.renderReactionBarHTML(messageId, reactions);
+    const newBar = parent?.querySelector('.msg-reactions');
+    if (newBar && parent) {
+      newBar.querySelectorAll('.msg-reaction-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const emoji = chip.dataset.emoji;
+          if (emoji && this.chatHandlers.onReact) {
+            this.chatHandlers.onReact(messageId, emoji);
+          }
+        });
+      });
+    }
+  }
+
+  setReplyTarget(target) {
+    const bar = document.getElementById('chatReplyBar');
+    const label = document.getElementById('chatReplyLabel');
+    const snippet = document.getElementById('chatReplySnippet');
+    if (!bar || !label || !snippet) return;
+    if (!target) {
+      bar.hidden = true;
+      label.textContent = '';
+      snippet.textContent = '';
+      return;
+    }
+    label.textContent = t('chat_replying_to').replace('{name}', target.nickname || '');
+    snippet.textContent = (target.content || '').slice(0, 80);
+    bar.hidden = false;
+  }
+
+  showHypeBurst(payload) {
+    const overlay = document.getElementById('hypeBurstOverlay');
+    if (!overlay || !payload) return;
+    const text = t('hype_burst')
+      .replace('{count}', String(payload.count || ''))
+      .replace('{emoji}', payload.emoji || '')
+      .replace('{time}', payload.label || this.formatVideoTime(payload.videoTime));
+    overlay.textContent = text;
+    overlay.hidden = false;
+    overlay.classList.add('is-visible');
+    clearTimeout(this._hypeTimer);
+    this._hypeTimer = setTimeout(() => {
+      overlay.classList.remove('is-visible');
+      overlay.hidden = true;
+    }, 3200);
+  }
+
+  renderMentionSuggestions(users, filter, onPick) {
+    const box = document.getElementById('mentionAutocomplete');
+    if (!box) return;
+    const q = (filter || '').toLowerCase();
+    const matches = (users || []).filter((u) => {
+      const nick = (u.nickname || '').toLowerCase();
+      return nick && nick.startsWith(q) && nick !== (this.myNickname || '').toLowerCase();
+    }).slice(0, 6);
+
+    if (!matches.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+
+    box.hidden = false;
+    box.innerHTML = matches.map((u) =>
+      `<button type="button" class="mention-option" data-nick="${this.escapeHTML(u.nickname)}">@${this.escapeHTML(u.nickname)}</button>`
+    ).join('');
+    box.querySelectorAll('.mention-option').forEach((btn) => {
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (onPick) onPick(btn.dataset.nick);
+        box.hidden = true;
+      });
+    });
+  }
+
+  hideMentionSuggestions() {
+    const box = document.getElementById('mentionAutocomplete');
+    if (box) {
+      box.hidden = true;
+      box.innerHTML = '';
+    }
+  }
+
+  bindNotificationSettings(notifications) {
+    const enabled = document.getElementById('settingNotifyEnabled');
+    const mentions = document.getElementById('settingNotifyMentions');
+    const cowatch = document.getElementById('settingNotifyCowatch');
+    const btnPerm = document.getElementById('btnNotifyPermission');
+    if (!enabled || !mentions || !cowatch) return;
+
+    enabled.checked = notifications.isEnabled();
+    mentions.checked = notifications.mentionsEnabled();
+    cowatch.checked = notifications.cowatchEnabled();
+
+    enabled.addEventListener('change', () => notifications.setEnabled(enabled.checked));
+    mentions.addEventListener('change', () => notifications.setMentions(mentions.checked));
+    cowatch.addEventListener('change', () => notifications.setCowatchers(cowatch.checked));
+    if (btnPerm) {
+      btnPerm.addEventListener('click', async () => {
+        const ok = await notifications.ensurePermission();
+        this.showToast(ok ? t('notify_permission') : t('voice_mic_denied'));
+      });
+    }
   }
 
   // Playlist Queue Rendering

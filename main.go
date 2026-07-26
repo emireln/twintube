@@ -31,6 +31,15 @@ var upgrader = websocket.Upgrader{
 var joinPasswordLimiter = security.NewRateLimiter(10, 5*time.Minute)
 
 func loadEnvFile(filename string) {
+	loadEnvFileInternal(filename, false)
+}
+
+// loadEnvFileOverride applies every key from filename (used for .env.local dev overrides).
+func loadEnvFileOverride(filename string) {
+	loadEnvFileInternal(filename, true)
+}
+
+func loadEnvFileInternal(filename string, override bool) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return
@@ -42,18 +51,20 @@ func loadEnvFile(filename string) {
 			continue
 		}
 		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(parts[1])
-			if os.Getenv(key) == "" {
-				os.Setenv(key, val)
-			}
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		if override || os.Getenv(key) == "" {
+			os.Setenv(key, val)
 		}
 	}
 }
 
 func main() {
 	loadEnvFile(".env")
+	loadEnvFileOverride(".env.local")
 	port := flag.Int("port", 8080, "Port for the HTTP server")
 	dbPath := flag.String("db", "twintube.db", "SQLite database file path fallback")
 	flag.Parse()
@@ -259,6 +270,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func clientReadPump(c *room.Client) {
 	defer func() {
+		room.GlobalPresence.Unregister(c)
 		if c.Room != nil {
 			c.Room.Unregister <- c
 		}
@@ -328,6 +340,33 @@ func clientWritePump(c *room.Client) {
 
 func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 	switch msg.Action {
+	case "JOIN_PRESENCE":
+		var payload struct {
+			Token string `json:"token"`
+		}
+		_ = json.Unmarshal(msg.Payload, &payload)
+		if payload.Token == "" {
+			return
+		}
+		claims, err := auth.ParseJWTToken(payload.Token)
+		if err != nil || claims == nil || db.Database == nil {
+			return
+		}
+		user, err := db.Database.GetUserByID(claims.UserID)
+		if err != nil || user == nil {
+			return
+		}
+		c.UserID = user.ID
+		c.Nickname = user.Username
+		c.AvatarURL = user.AvatarURL
+		c.IsGuest = false
+		room.GlobalPresence.Register(c)
+		raw, _ := json.Marshal(map[string]bool{"ok": true})
+		select {
+		case c.Send <- room.WSMessage{Action: "PRESENCE_OK", Payload: raw}:
+		default:
+		}
+
 	case "JOIN_ROOM":
 		if c.Room != nil {
 			sendError(c, "Already joined a room.")
@@ -462,7 +501,9 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 		var payload struct {
-			Content string `json:"content"`
+			Content   string   `json:"content"`
+			ReplyToID string   `json:"replyToId"`
+			VideoTime *float64 `json:"videoTime"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil || strings.TrimSpace(payload.Content) == "" {
 			return
@@ -473,23 +514,53 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			content = content[:500]
 		}
 
-		chatMsg := db.ChatMessage{
-			Type:      "chat",
-			Nickname:  c.Nickname,
-			AvatarURL: c.AvatarURL,
-			Content:   content,
-			IsSystem:  false,
-			Timestamp: time.Now().Format("15:04"),
+		var videoTime *float64
+		if payload.VideoTime != nil && *payload.VideoTime >= 0 {
+			v := *payload.VideoTime
+			videoTime = &v
+		} else if c.Room != nil {
+			t := c.Room.GetCalculatedTime()
+			videoTime = &t
 		}
 
-		if db.Database != nil && c.Room != nil && c.Room.IsPersistent() {
-			_ = db.Database.SaveChatMessage(c.RoomID, c.UserID, c.Nickname, chatMsg.Content, false)
+		chatMsg, mentioned := c.Room.PostUserChat(c, content, payload.ReplyToID, videoTime)
+		c.Room.BroadcastChatMessage(chatMsg)
+
+		for _, target := range mentioned {
+			room.SendMentionNotify(target, c.RoomID, chatMsg)
 		}
 
-		raw, _ := json.Marshal(chatMsg)
-		c.Room.Broadcast <- room.WSMessage{
-			Action:  "CHAT_MESSAGE",
-			Payload: raw,
+	case "CHAT_REACTION":
+		if c.Room == nil {
+			return
+		}
+		var payload struct {
+			MessageID string   `json:"messageId"`
+			Emoji     string   `json:"emoji"`
+			VideoTime *float64 `json:"videoTime"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return
+		}
+		payload.MessageID = strings.TrimSpace(payload.MessageID)
+		payload.Emoji = strings.TrimSpace(payload.Emoji)
+		if payload.MessageID == "" || payload.Emoji == "" {
+			return
+		}
+
+		var videoTime *float64
+		if payload.VideoTime != nil && *payload.VideoTime >= 0 {
+			v := *payload.VideoTime
+			videoTime = &v
+		} else {
+			t := c.Room.GetCalculatedTime()
+			videoTime = &t
+		}
+
+		update, hype := c.Room.ToggleChatReaction(c, payload.MessageID, payload.Emoji, videoTime)
+		c.Room.BroadcastChatReaction(update)
+		if hype != nil {
+			c.Room.BroadcastHypeBurst(*hype)
 		}
 
 	case "ADD_QUEUE":

@@ -107,6 +107,14 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 		rmRoom.ExpiresAt = expiresAt
 	}
 
+	hostNickname := req.Name
+	if userID != "" && db.Database != nil {
+		if user, err := db.Database.GetUserByID(userID); err == nil && user != nil && user.Username != "" {
+			hostNickname = user.Username
+		}
+		room.GlobalPresence.NotifyCoWatchersRoomStarted(userID, hostNickname, roomID, rmRoom.Name)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(CreateRoomResponse{
 		RoomCode:  roomID,

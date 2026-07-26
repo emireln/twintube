@@ -30,12 +30,20 @@ type User struct {
 }
 
 type ChatMessage struct {
-	Type      string `json:"type"`
-	Nickname  string `json:"nickname"`
-	AvatarURL string `json:"avatarUrl,omitempty"`
-	Content   string `json:"content"`
-	IsSystem  bool   `json:"isSystem"`
-	Timestamp string `json:"timestamp"`
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Nickname    string         `json:"nickname"`
+	UserID      string         `json:"userId,omitempty"`
+	AvatarURL   string         `json:"avatarUrl,omitempty"`
+	Content     string         `json:"content"`
+	IsSystem    bool           `json:"isSystem"`
+	Timestamp   string         `json:"timestamp"`
+	ReplyToID   string         `json:"replyToId,omitempty"`
+	ReplyToNick string         `json:"replyToNick,omitempty"`
+	ReplyToText string         `json:"replyToText,omitempty"`
+	Mentions    []string       `json:"mentions,omitempty"`
+	Reactions   map[string]int `json:"reactions,omitempty"`
+	VideoTime   *float64       `json:"videoTime,omitempty"`
 }
 
 type PlaylistItem struct {
@@ -259,6 +267,13 @@ func (d *DB) createTables() error {
 	return d.migrateRoomColumns()
 }
 
+func (d *DB) finishMigrations() error {
+	if err := d.migrateChatColumns(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *DB) migrateRoomColumns() error {
 	alterations := []string{
 		`ALTER TABLE rooms ADD COLUMN owner_id VARCHAR(64) DEFAULT ''`,
@@ -329,7 +344,10 @@ func (d *DB) ensureMomentsTable() error {
 		);`
 	}
 	_, err := d.db.Exec(q)
-	return err
+	if err != nil {
+		return err
+	}
+	return d.finishMigrations()
 }
 
 func (d *DB) migrateMediaColumns() error {
@@ -470,60 +488,6 @@ func (d *DB) SaveRoom(roomID, hostID, videoID, status string, currentTime float6
 
 	_, err := d.db.Exec(d.Rebind(query), hostID, videoID, status, currentTime, roomID)
 	return err
-}
-
-func (d *DB) SaveChatMessage(roomID, userID, nickname, content string, isSystem bool) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if !d.roomIsOwnedLocked(roomID) {
-		return nil
-	}
-
-	query := d.Rebind(`INSERT INTO messages (room_id, user_id, nickname, content, is_system, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP);`)
-	_, err := d.db.Exec(query, roomID, userID, nickname, content, isSystem)
-	return err
-}
-
-func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	query := d.Rebind(`
-		SELECT m.nickname, COALESCE(u.avatar_url, ''), m.content, m.is_system, m.created_at
-		FROM messages m
-		LEFT JOIN users u ON u.id = m.user_id
-		WHERE m.room_id = ?
-		ORDER BY m.id DESC
-		LIMIT ?;`)
-	rows, err := d.db.Query(query, roomID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var messages []ChatMessage
-	for rows.Next() {
-		var msg ChatMessage
-		var isSys bool
-		var createdAt time.Time
-
-		if err := rows.Scan(&msg.Nickname, &msg.AvatarURL, &msg.Content, &isSys, &createdAt); err != nil {
-			continue
-		}
-
-		msg.Type = "chat"
-		msg.IsSystem = isSys
-		msg.Timestamp = createdAt.Format("15:04")
-		messages = append(messages, msg)
-	}
-
-	// Reverse so clients render oldest → newest
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
-
-	return messages, nil
 }
 
 func (d *DB) SavePlaylistItem(item PlaylistItem) error {
@@ -764,6 +728,7 @@ func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
 	defer d.mu.Unlock()
 
 	for _, q := range []string{
+		`DELETE FROM message_reactions WHERE room_id = ?;`,
 		`DELETE FROM messages WHERE room_id = ?;`,
 		`DELETE FROM playlist_items WHERE room_id = ?;`,
 		`DELETE FROM moments WHERE room_id = ?;`,
@@ -791,6 +756,7 @@ func (d *DB) DeleteEphemeralRoomData(roomID string) error {
 	defer d.mu.Unlock()
 
 	for _, q := range []string{
+		`DELETE FROM message_reactions WHERE room_id = ?;`,
 		`DELETE FROM messages WHERE room_id = ?;`,
 		`DELETE FROM playlist_items WHERE room_id = ?;`,
 		`DELETE FROM moments WHERE room_id = ?;`,

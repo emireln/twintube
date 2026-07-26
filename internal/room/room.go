@@ -86,7 +86,15 @@ type Room struct {
 	Register      chan *Client
 	Unregister    chan *Client
 	Broadcast     chan WSMessage
-	mu            sync.RWMutex
+	manager         *RoomManager
+	chatLog           []db.ChatMessage
+	chatByID          map[string]chatMessageRef
+	chatReacts        map[string]map[string]map[string]bool
+	hypeBuckets       []hypeBucket
+	stopCh            chan struct{}
+	stopOnce          sync.Once
+	emptyGraceTimer   *time.Timer
+	mu                sync.RWMutex
 }
 
 func (rm *RoomManager) RemoveRoom(roomID string) {
@@ -143,12 +151,16 @@ var Manager = &RoomManager{
 	rooms: make(map[string]*Room),
 }
 
+// GuestRoomGracePeriod is how long guest-created rooms stay joinable after the last viewer leaves.
+var GuestRoomGracePeriod = 15 * time.Minute
+
 func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 	starter := PickRandomStarter()
 	return &Room{
-		ID:     roomID,
-		Name:   name,
-		HostID: "",
+		ID:      roomID,
+		Name:    name,
+		manager: rm,
+		HostID:  "",
 		State: VideoState{
 			VideoID:         starter.VideoID,
 			Title:           starter.Title,
@@ -168,6 +180,9 @@ func (rm *RoomManager) newRoomShell(roomID, name string) *Room {
 		Register:      make(chan *Client),
 		Unregister:    make(chan *Client),
 		Broadcast:     make(chan WSMessage, 64),
+		stopCh:        make(chan struct{}),
+		chatByID:      make(map[string]chatMessageRef),
+		chatReacts:    make(map[string]map[string]map[string]bool),
 	}
 }
 
@@ -313,9 +328,59 @@ func (r *Room) SendTo(clientID string, message WSMessage) bool {
 	}
 }
 
+func (r *Room) cancelGuestGraceDestroyLocked() {
+	if r.emptyGraceTimer != nil {
+		r.emptyGraceTimer.Stop()
+		r.emptyGraceTimer = nil
+	}
+}
+
+func (r *Room) scheduleGuestGraceDestroyLocked() {
+	if r.OwnerID != "" || len(r.Clients) > 0 {
+		return
+	}
+	r.cancelGuestGraceDestroyLocked()
+	roomID := r.ID
+	grace := GuestRoomGracePeriod
+	r.emptyGraceTimer = time.AfterFunc(grace, func() {
+		r.destroyEphemeralAfterGrace(roomID)
+	})
+	log.Printf("[ROOM %s] Empty guest room; keeping alive for %s", roomID, grace)
+}
+
+func (r *Room) stopRun() {
+	r.stopOnce.Do(func() {
+		close(r.stopCh)
+	})
+}
+
+func (r *Room) destroyEphemeralAfterGrace(roomID string) {
+	r.mu.Lock()
+	if r.OwnerID != "" || len(r.Clients) > 0 {
+		r.mu.Unlock()
+		return
+	}
+	r.cancelGuestGraceDestroyLocked()
+	r.mu.Unlock()
+
+	if db.Database != nil {
+		_ = db.Database.DeleteEphemeralRoomData(roomID)
+	}
+	if r.manager != nil {
+		r.manager.RemoveRoom(roomID)
+	} else {
+		Manager.RemoveRoom(roomID)
+	}
+	log.Printf("[ROOM] Destroyed ephemeral room %s after grace period", roomID)
+	r.stopRun()
+}
+
 func (r *Room) Run() {
 	for {
 		select {
+		case <-r.stopCh:
+			return
+
 		case client := <-r.Register:
 			r.mu.Lock()
 			if client.JoinedAt.IsZero() {
@@ -324,6 +389,7 @@ func (r *Room) Run() {
 			client.IsHost = false
 			r.Clients[client.ID] = client
 			r.restoreCohostOnJoinLocked(client)
+			r.cancelGuestGraceDestroyLocked()
 
 			hostAlert := ""
 			ownerReclaim := r.OwnerID != "" && client.UserID != "" && client.UserID == r.OwnerID
@@ -355,16 +421,19 @@ func (r *Room) Run() {
 			r.BroadcastUserList()
 			r.BroadcastRoomMeta()
 			r.SendInitState(client)
+			go r.RecordCoWatchersFromRoom()
+			GlobalPresence.Register(client)
 
 		case client := <-r.Unregister:
 			leftNickname := ""
 			newHostAlert := ""
-			destroyEphemeral := false
+			scheduleGrace := false
 
 			r.mu.Lock()
 			if _, ok := r.Clients[client.ID]; ok {
 				delete(r.Clients, client.ID)
 				close(client.Send)
+				GlobalPresence.Unregister(client)
 				leftNickname = client.Nickname
 				if r.SkipVotes != nil {
 					delete(r.SkipVotes, client.ID)
@@ -387,7 +456,7 @@ func (r *Room) Run() {
 				}
 
 				if len(r.Clients) == 0 && r.OwnerID == "" {
-					destroyEphemeral = true
+					scheduleGrace = true
 				}
 			}
 			r.mu.Unlock()
@@ -401,13 +470,10 @@ func (r *Room) Run() {
 				r.BroadcastRoomMeta()
 			}
 
-			if destroyEphemeral {
-				if db.Database != nil {
-					_ = db.Database.DeleteEphemeralRoomData(r.ID)
-				}
-				Manager.RemoveRoom(r.ID)
-				log.Printf("[ROOM] Destroyed ephemeral room %s", r.ID)
-				return
+			if scheduleGrace {
+				r.mu.Lock()
+				r.scheduleGuestGraceDestroyLocked()
+				r.mu.Unlock()
 			}
 
 		case message := <-r.Broadcast:
@@ -457,8 +523,6 @@ func (r *Room) SnapshotState() VideoState {
 
 func (r *Room) SendInitState(client *Client) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	calculatedTime := r.State.CurrentTime
 	nowMs := time.Now().UnixNano() / 1e6
 	if r.State.Status == "PLAYING" {
@@ -507,11 +571,15 @@ func (r *Room) SendInitState(client *Client) {
 			"sourceUrl":       r.State.SourceURL,
 			"seekable":        r.State.Seekable,
 		},
-		"playlist": playlist,
-		"users":    r.getUserListUnsafe(),
-		"moments":  approved,
+		"playlist":       playlist,
+		"users":          r.getUserListUnsafe(),
+		"moments":        approved,
 		"pendingMoments": pending,
 	}
+
+	r.hydrateChatFromDB()
+	history := r.chatHistorySnapshot()
+	r.mu.Unlock()
 
 	raw, _ := json.Marshal(statePayload)
 	select {
@@ -524,16 +592,14 @@ func (r *Room) SendInitState(client *Client) {
 		log.Printf("[ROOM %s] Failed to send INIT_STATE to %s (send buffer full)", r.ID, client.Nickname)
 	}
 
-	if db.Database != nil && r.OwnerID != "" {
-		if history, err := db.Database.LoadChatHistory(r.ID, 50); err == nil && len(history) > 0 {
-			rawHistory, _ := json.Marshal(history)
-			select {
-			case client.Send <- WSMessage{
-				Action:  "CHAT_HISTORY",
-				Payload: rawHistory,
-			}:
-			default:
-			}
+	if len(history) > 0 {
+		rawHistory, _ := json.Marshal(history)
+		select {
+		case client.Send <- WSMessage{
+			Action:  "CHAT_HISTORY",
+			Payload: rawHistory,
+		}:
+		default:
 		}
 	}
 }
@@ -585,23 +651,8 @@ func (r *Room) SetLocalFileReady(client *Client, videoID string, ready bool) {
 }
 
 func (r *Room) BroadcastSystemAlert(content string) {
-	msg := db.ChatMessage{
-		Type:      "chat",
-		Nickname:  "System",
-		Content:   content,
-		IsSystem:  true,
-		Timestamp: time.Now().Format("15:04"),
-	}
-
-	if db.Database != nil && r.IsPersistent() {
-		_ = db.Database.SaveChatMessage(r.ID, "", "System", content, true)
-	}
-
-	raw, _ := json.Marshal(msg)
-	r.deliver(WSMessage{
-		Action:  "CHAT_MESSAGE",
-		Payload: raw,
-	})
+	msg := r.PostSystemChat(content)
+	r.BroadcastChatMessage(msg)
 }
 
 type MediaMeta struct {

@@ -7,6 +7,7 @@ import { AuthManager } from './auth.js';
 import { t, translateError } from './i18n.js';
 import { getLocalBlobUrl, isLocalVideoId, registerLocalFileFromPicker, tryMatchLocalFile } from './localmedia.js';
 import { VoiceChat } from './voice.js';
+import { notifications } from './notifications.js';
 
 class TwinTubeApp {
   constructor() {
@@ -15,6 +16,7 @@ class TwinTubeApp {
     this.auth = new AuthManager();
     this.player = null;
     this.voice = null;
+    this.chatReplyTarget = null;
 
     this.ui.bindSettingsAuth(this.auth);
 
@@ -338,14 +340,65 @@ class TwinTubeApp {
     // Chat Form Submission
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
+    const btnCancelReply = document.getElementById('btnCancelReply');
+
+    this.ui.setupChatHandlers({
+      onReply: (target) => this.setChatReplyTarget(target),
+      onReact: (messageId, emoji) => this.sendChatReaction(messageId, emoji),
+      onJumpTime: (time) => this.jumpToChatTime(time)
+    });
+    this.ui.bindNotificationSettings(notifications);
+
+    if (btnCancelReply) {
+      btnCancelReply.addEventListener('click', () => this.setChatReplyTarget(null));
+    }
+
     if (chatForm && chatInput) {
       chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const content = chatInput.value.trim();
         if (content) {
-          this.ws.sendAction('CHAT_MESSAGE', { content });
+          const payload = { content };
+          if (this.chatReplyTarget?.id) {
+            payload.replyToId = this.chatReplyTarget.id;
+          }
+          try {
+            if (this.player?.getCurrentTime) {
+              const videoTime = this.player.getCurrentTime();
+              if (typeof videoTime === 'number' && videoTime >= 0) payload.videoTime = videoTime;
+            }
+          } catch (_) {
+            // Player not ready yet — send without timestamp.
+          }
+          if (!this.ws.sendAction('CHAT_MESSAGE', payload)) {
+            this.ui.showToast(t('failed_send_message'));
+            return;
+          }
           chatInput.value = '';
+          this.setChatReplyTarget(null);
+          this.ui.hideMentionSuggestions();
         }
+      });
+
+      chatInput.addEventListener('input', () => {
+        this.ui.myNickname = this.nickname;
+        const val = chatInput.value;
+        const at = val.lastIndexOf('@');
+        if (at >= 0 && (at === 0 || /\s/.test(val[at - 1]))) {
+          const partial = val.slice(at + 1);
+          if (!partial.includes(' ')) {
+            this.ui.renderMentionSuggestions(this.lastUsers, partial, (nick) => {
+              chatInput.value = `${val.slice(0, at)}@${nick} `;
+              chatInput.focus();
+            });
+            return;
+          }
+        }
+        this.ui.hideMentionSuggestions();
+      });
+
+      chatInput.addEventListener('blur', () => {
+        setTimeout(() => this.ui.hideMentionSuggestions(), 150);
       });
     }
 
@@ -967,6 +1020,8 @@ class TwinTubeApp {
       this.hasJoined = true;
       document.body.classList.remove('room-gated');
       this.currentClientID = payload.clientId || '';
+      this.ui.setChatClientId(this.currentClientID);
+      this.ui.myNickname = this.nickname;
       this.playlist = payload.playlist || [];
       this.lastUsers = payload.users || [];
       this.approvedMoments = payload.moments || [];
@@ -1037,13 +1092,39 @@ class TwinTubeApp {
     });
 
     this.ws.on('CHAT_MESSAGE', (msg) => {
-      this.ui.renderChatMessage(msg);
+      try {
+        this.ui.renderChatMessage(msg);
+      } catch (err) {
+        console.error('[CHAT] render failed:', err, msg);
+      }
     });
 
     this.ws.on('CHAT_HISTORY', (history) => {
+      this.ui.clearChatMessages();
       if (Array.isArray(history)) {
         history.forEach(msg => this.ui.renderChatMessage(msg));
       }
+    });
+
+    this.ws.on('CHAT_REACTION_UPDATE', (update) => {
+      if (update?.messageId && update.reactions) {
+        this.ui.updateChatReactions(update.messageId, update.reactions);
+      }
+    });
+
+    this.ws.on('HYPE_BURST', (payload) => {
+      this.ui.showHypeBurst(payload);
+    });
+
+    this.ws.on('MENTION_NOTIFY', (payload) => {
+      notifications.notifyMention(payload, this.roomId);
+      if (!document.hidden) {
+        this.ui.showToast(`${payload?.from || 'Someone'} @ ${payload?.content?.slice(0, 60) || ''}`);
+      }
+    });
+
+    this.ws.on('COWATCHER_ROOM', (payload) => {
+      notifications.notifyCowatcherRoom(payload);
     });
 
     this.ws.on('QUEUE_UPDATE', (playlist) => {
@@ -1353,6 +1434,38 @@ class TwinTubeApp {
       if (btnClose) btnClose.addEventListener('click', onCancel);
       this.ui.showModal('joinPasswordModal');
       input.focus();
+    });
+  }
+
+  setChatReplyTarget(target) {
+    this.chatReplyTarget = target;
+    this.ui.setReplyTarget(target);
+    const chatInput = document.getElementById('chatInput');
+    if (target && chatInput) chatInput.focus();
+  }
+
+  sendChatReaction(messageId, emoji) {
+    if (!messageId || !emoji) return;
+    const payload = { messageId, emoji };
+    if (this.player?.getCurrentTime) {
+      const t = this.player.getCurrentTime();
+      if (typeof t === 'number' && t >= 0) payload.videoTime = t;
+    }
+    this.ws.sendAction('CHAT_REACTION', payload);
+  }
+
+  jumpToChatTime(time) {
+    if (!this.canControlPlayback && !this.isHost && !this.isCohost) {
+      this.ui.showToast(t('moment_host_only'));
+      return;
+    }
+    const videoId = this.player?.currentVideoId || this.player?.videoId;
+    if (!videoId) return;
+    this.ws.sendAction('STATE_CHANGE', {
+      videoId,
+      status: this.lastVideoStatus || 'PAUSED',
+      currentTime: time,
+      title: this.lastVideoTitle || ''
     });
   }
 

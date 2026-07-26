@@ -163,6 +163,7 @@
 
         <!-- Floating Reactions Overlay -->
         <div class="reaction-overlay" id="reactionOverlay"></div>
+        <div class="hype-burst-overlay" id="hypeBurstOverlay" hidden></div>
 
         <!-- Compact reaction dock (works in normal + theater) -->
         <div class="reaction-dock" id="reactionDock">
@@ -193,7 +194,12 @@
             </button>
           </div>
           <button type="button" class="tool-btn reaction-launch" id="btnReactions" data-i18n-title="reactions" title="Reactions" aria-label="Reactions" aria-expanded="false" aria-controls="reactionTray">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            <svg class="icon-smiley" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+              <circle class="icon-smiley-eye" cx="9" cy="9" r="1.25"/>
+              <circle class="icon-smiley-eye" cx="15" cy="9" r="1.25"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -286,6 +292,18 @@
 
         <!-- Chat Form with Emoji Picker -->
         <div class="chat-input-wrapper">
+          <div class="chat-reply-bar" id="chatReplyBar" hidden>
+            <div class="chat-reply-preview">
+              <span class="chat-reply-label" id="chatReplyLabel"></span>
+              <span class="chat-reply-snippet" id="chatReplySnippet"></span>
+            </div>
+            <button type="button" class="btn-chat-icon chat-reply-cancel" id="btnCancelReply" data-i18n-title="chat_cancel_reply" title="Cancel reply">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div class="mention-autocomplete" id="mentionAutocomplete" hidden></div>
+
           <!-- Emoji Picker Panel -->
           <div class="emoji-picker" id="emojiPicker">
             <div class="emoji-grid">
@@ -299,7 +317,12 @@
 
           <form class="chat-input-bar" id="chatForm">
             <button type="button" class="btn-chat-icon" id="btnEmojiPicker" data-i18n-title="insert_emoji" title="Insert Emoji">
-              <svg viewBox="0 -960 960 960" width="20" height="20" fill="currentColor"><path d="M480-480Zm0 400q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q43 0 83 8.5t77 24.5v90q-35-20-75.5-31.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160q133 0 226.5-93.5T800-480q0-32-6.5-62T776-600h86q9 29 13.5 58.5T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm320-600v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80ZM620-520q25 0 42.5-17.5T680-580q0-25-17.5-42.5T620-640q-25 0-42.5 17.5T560-580q0 25 17.5 42.5T620-520Zm-280 0q25 0 42.5-17.5T400-580q0-25-17.5-42.5T340-640q-25 0-42.5 17.5T280-580q0 25 17.5 42.5T340-520Zm263.5 221.5Q659-337 684-400H276q25 63 80.5 101.5T480-260q68 0 123.5-38.5Z"/></svg>
+              <svg class="icon-smiley" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <circle class="icon-smiley-eye" cx="9" cy="9" r="1.25"/>
+                <circle class="icon-smiley-eye" cx="15" cy="9" r="1.25"/>
+              </svg>
             </button>
             <input type="text" id="chatInput" class="input-field" data-i18n-ph="type_message" placeholder="Send a message..." autocomplete="off">
             <button type="submit" class="btn btn-primary btn-chat-send" data-i18n-title="send_message" title="Send Message">
@@ -550,6 +573,30 @@
           </div>
         </section>
 
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <h3 data-i18n="notify_settings">Notifications</h3>
+            <p data-i18n="notify_settings_desc">Browser or desktop alerts when you're mentioned or a co-watcher starts a room</p>
+          </div>
+          <div class="settings-toggle-list">
+            <label class="settings-toggle-row">
+              <span data-i18n="notify_enable">Enable notifications</span>
+              <input type="checkbox" id="settingNotifyEnabled">
+            </label>
+            <label class="settings-toggle-row">
+              <span data-i18n="notify_mentions">@mention alerts</span>
+              <input type="checkbox" id="settingNotifyMentions">
+            </label>
+            <label class="settings-toggle-row">
+              <span data-i18n="notify_cowatch">Co-watcher room alerts</span>
+              <input type="checkbox" id="settingNotifyCowatch">
+            </label>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="btn btn-secondary btn-compact" id="btnNotifyPermission" data-i18n="notify_permission">Allow notifications</button>
+          </div>
+        </section>
+
         <p id="settingsLoginHint" class="settings-login-hint" data-i18n="profile_login_hint" hidden>Sign in to edit your profile and password.</p>
 
         <section class="settings-card" id="settingsProfileSection" hidden>
@@ -630,6 +677,6 @@
   <!-- Client JavaScript Modules -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script type="module" src="/static/js/app.js?v=1.0.32"></script>
+  <script type="module" src="/static/js/app.js?v=1.0.37"></script>
 </body>
 </html>

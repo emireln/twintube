@@ -5,7 +5,9 @@ const {
   Menu,
   shell,
   session,
-  nativeImage
+  nativeImage,
+  ipcMain,
+  Notification
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -263,6 +265,20 @@ if (!gotLock) {
 
     configureSession();
     lang = detectLang();
+
+    ipcMain.on('twintube-show-notification', (_event, { title, body }) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({ title: title || 'TwinTube', body: body || '' });
+      n.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+          mainWindow.webContents.send('twintube-notification-clicked');
+        }
+      });
+      n.show();
+    });
 
     app.on('web-contents-created', (_event, contents) => {
       hardenWebContents(contents);

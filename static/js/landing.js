@@ -3,12 +3,15 @@
 import { UIManager } from './ui.js';
 import { AuthManager } from './auth.js';
 import { t, translateError } from './i18n.js';
+import { WSClient } from './ws.js';
+import { notifications } from './notifications.js';
 
 class LandingApp {
   constructor() {
     this.ui = new UIManager();
     this.auth = new AuthManager();
     this.pendingJoinCode = '';
+    this.presenceWs = null;
 
     this.ui.bindSettingsAuth(this.auth);
     this.init();
@@ -46,6 +49,7 @@ class LandingApp {
     await this.auth.checkAuth();
     this.setupCreateRoom();
     this.updateAuthNavUI();
+    this.setupPresenceNotifications();
     this.consumeFlashToast();
 
     this.ui.initMyRoomsModal(
@@ -355,6 +359,34 @@ class LandingApp {
 
   updateAuthNavUI() {
     this.ui.updateUserNavUI(this.auth);
+    const hint = document.querySelector('.landing-guest-grace-hint');
+    if (hint) {
+      hint.hidden = this.auth.isLoggedIn();
+    }
+    this.setupPresenceNotifications();
+  }
+
+  setupPresenceNotifications() {
+    if (!this.auth.isLoggedIn()) {
+      if (this.presenceWs) {
+        this.presenceWs.disconnect(true);
+        this.presenceWs = null;
+      }
+      return;
+    }
+    if (this.presenceWs) return;
+
+    this.presenceWs = new WSClient();
+    this.presenceWs.on('open', () => {
+      const token = this.auth.getToken();
+      if (token) {
+        this.presenceWs.sendAction('JOIN_PRESENCE', { token });
+      }
+    });
+    this.presenceWs.on('COWATCHER_ROOM', (payload) => {
+      notifications.notifyCowatcherRoom(payload);
+    });
+    this.presenceWs.connect();
   }
 }
 
