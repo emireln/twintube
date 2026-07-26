@@ -59,6 +59,46 @@ export class UIManager {
     this.settingsAuth = auth;
   }
 
+  // Uploads via AuthManager when available; falls back to the API directly so a
+  // stale cached auth.js (missing uploadAvatar) cannot break profile photos.
+  async uploadAvatarFile(auth, file) {
+    if (typeof auth?.uploadAvatar === 'function') {
+      return auth.uploadAvatar(file);
+    }
+    const token = auth?.getToken?.();
+    if (!token) {
+      throw new Error(t('profile_login_hint'));
+    }
+    const form = new FormData();
+    form.append('avatar', file);
+    const resp = await fetch('/api/auth/avatar', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form
+    });
+    let data = {};
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = {};
+    }
+    if (!resp.ok) {
+      throw new Error(data.error || t('avatar_upload_fail'));
+    }
+    if (data.token && data.user && typeof auth.setAuthData === 'function') {
+      auth.setAuthData(data.token, data.user);
+    } else if (data.user) {
+      auth.user = data.user;
+      try {
+        localStorage.setItem('twintube_user', JSON.stringify(data.user));
+      } catch (e) {}
+      if (typeof auth.notifyListeners === 'function') {
+        auth.notifyListeners();
+      }
+    }
+    return data;
+  }
+
   closeSettingsLangPicker() {
     const picker = document.getElementById('settingsLangPicker');
     const btn = document.getElementById('btnSettingsLangPicker');
@@ -169,7 +209,7 @@ export class UIManager {
         }
         btnUploadAvatar.disabled = true;
         try {
-          await auth.uploadAvatar(file);
+          await this.uploadAvatarFile(auth, file);
           const user = auth.getUser();
           setAvatarPreview(user?.avatarUrl || '');
           this.updateUserNavUI(auth);

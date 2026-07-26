@@ -73,7 +73,15 @@ func main() {
 	authLimiter := security.NewRateLimiter(20, time.Minute)
 
 	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/static/", security.Middleware(http.StripPrefix("/static/", fs)))
+	http.Handle("/static/", security.Middleware(http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// ES modules are sticky in browsers/Electron; avoid serving stale JS/CSS
+		// after deploys (e.g. ui.js calling auth.uploadAvatar from an old auth.js).
+		lower := strings.ToLower(r.URL.Path)
+		if strings.HasSuffix(lower, ".js") || strings.HasSuffix(lower, ".css") || strings.HasSuffix(lower, ".html") {
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		}
+		fs.ServeHTTP(w, r)
+	}))))
 
 	apiHandler := api.NewRoomAPIHandler(room.Manager)
 
@@ -196,10 +204,12 @@ func serveLandingOrRoom(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
 	if path == "/" {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		http.ServeFile(w, r, filepath.Join(".", "static", "index.html"))
 		return
 	}
 	if strings.HasPrefix(path, "/room/") {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		http.ServeFile(w, r, filepath.Join(".", "static", "room.html"))
 		return
 	}
