@@ -14,7 +14,7 @@ downloads/*
 !downloads/.gitkeep
 
 # User-uploaded avatars
-uploads/
+uploads/*
 !uploads/avatars/
 uploads/avatars/*
 !uploads/avatars/.gitkeep
