@@ -1596,11 +1596,10 @@ body.theater-mode .floating-reaction img {
   display: flex;
 }
 
-/* Scrollable panels — chat, queue, viewers, my rooms */
+/* Scrollable panels — chat, queue, viewers */
 .chat-messages,
 .queue-list,
-.viewers-list,
-.my-rooms-list {
+.viewers-list {
   flex: 1 1 0;
   min-height: 0;
   max-height: 100%;
@@ -1615,15 +1614,13 @@ body.theater-mode .floating-reaction img {
 
 .chat-messages::-webkit-scrollbar,
 .queue-list::-webkit-scrollbar,
-.viewers-list::-webkit-scrollbar,
-.my-rooms-list::-webkit-scrollbar {
+.viewers-list::-webkit-scrollbar {
   width: 8px;
 }
 
 .chat-messages::-webkit-scrollbar-track,
 .queue-list::-webkit-scrollbar-track,
-.viewers-list::-webkit-scrollbar-track,
-.my-rooms-list::-webkit-scrollbar-track {
+.viewers-list::-webkit-scrollbar-track {
   background: var(--md-surface-variant);
   border-radius: var(--radius-full);
   margin: 6px 0;
@@ -1631,8 +1628,7 @@ body.theater-mode .floating-reaction img {
 
 .chat-messages::-webkit-scrollbar-thumb,
 .queue-list::-webkit-scrollbar-thumb,
-.viewers-list::-webkit-scrollbar-thumb,
-.my-rooms-list::-webkit-scrollbar-thumb {
+.viewers-list::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--md-primary) 50%, var(--md-on-surface-variant));
   border-radius: var(--radius-full);
   border: 2px solid var(--md-surface-variant);
@@ -1641,8 +1637,7 @@ body.theater-mode .floating-reaction img {
 
 .chat-messages::-webkit-scrollbar-thumb:hover,
 .queue-list::-webkit-scrollbar-thumb:hover,
-.viewers-list::-webkit-scrollbar-thumb:hover,
-.my-rooms-list::-webkit-scrollbar-thumb:hover {
+.viewers-list::-webkit-scrollbar-thumb:hover {
   background-color: var(--md-primary);
 }
 
@@ -2267,12 +2262,40 @@ body.theater-mode .floating-reaction img {
 }
 
 .my-rooms-list {
+  min-height: 180px;
   max-height: min(420px, 55vh);
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
   padding: 4px 8px 4px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--md-primary) 55%, var(--md-on-surface-variant)) var(--md-surface-variant);
+}
+
+.my-rooms-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.my-rooms-list::-webkit-scrollbar-track {
+  background: var(--md-surface-variant);
+  border-radius: var(--radius-full);
+  margin: 6px 0;
+}
+
+.my-rooms-list::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--md-primary) 50%, var(--md-on-surface-variant));
+  border-radius: var(--radius-full);
+  border: 2px solid var(--md-surface-variant);
+  min-height: 48px;
+}
+
+.my-rooms-list::-webkit-scrollbar-thumb:hover {
+  background-color: var(--md-primary);
 }
 
 .room-item-card {
