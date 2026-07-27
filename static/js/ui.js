@@ -822,11 +822,13 @@ export class UIManager {
           </div>
           ${replyBlock}
           <div class="msg-content-stack">
-            <div class="msg-actions">
-              <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
-              <button type="button" class="msg-action-btn btn-msg-react" title="${t('chat_react')}">${t('chat_react')}</button>
+            <div class="msg-text">
+              <div class="msg-actions">
+                <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
+                <button type="button" class="msg-action-btn btn-msg-react" title="${t('chat_react')}">${t('chat_react')}</button>
+              </div>
+              ${this.formatChatContent(msg.content, msg.mentions)}
             </div>
-            <div class="msg-text">${this.formatChatContent(msg.content, msg.mentions)}</div>
             ${reactionsHTML}
           </div>
         </div>

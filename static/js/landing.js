@@ -359,10 +359,6 @@ class LandingApp {
 
   updateAuthNavUI() {
     this.ui.updateUserNavUI(this.auth);
-    const hint = document.querySelector('.landing-guest-grace-hint');
-    if (hint) {
-      hint.hidden = this.auth.isLoggedIn();
-    }
     this.setupPresenceNotifications();
   }
 
