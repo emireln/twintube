@@ -182,7 +182,7 @@ func (d *DB) LoadChatHistory(roomID string, limit int) ([]ChatMessage, error) {
 		msg.ReplyToID = strings.TrimSpace(replyToID)
 		msg.Mentions = mentionsFromJSON(mentionsRaw)
 		msg.VideoTime = videoTime
-		msg.Timestamp = createdAt.Format("15:04")
+		msg.Timestamp = createdAt.In(time.Local).Format("15:04")
 		messages = append(messages, msg)
 		ids = append(ids, msg.ID)
 	}
