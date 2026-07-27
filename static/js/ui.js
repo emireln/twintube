@@ -807,28 +807,24 @@ export class UIManager {
           <span class="msg-reply-author">${this.escapeHTML(msg.replyToNick || '')}</span>
           <span class="msg-reply-text">${this.escapeHTML(msg.replyToText || '')}</span>
         </div>` : '';
-      const videoTag = msg.videoTime != null && msg.videoTime >= 0
-        ? `<span class="msg-video-time" title="${t('jump_to_moment')}">${this.escapeHTML(this.formatVideoTime(msg.videoTime))}</span>`
-        : '';
       const reactionsHTML = this.renderReactionBarHTML(msg.id, msg.reactions || {});
 
       el.innerHTML = `
         ${this.avatarHTML(msg.avatarUrl, initial)}
         <div class="msg-body">
-          <div class="msg-header">
-            <span class="msg-author">${this.escapeHTML(msg.nickname)}</span>
-            <span class="msg-time">${msg.timestamp || ''}</span>
-            ${videoTag}
+          <div class="msg-header-row">
+            <div class="msg-header">
+              <span class="msg-author">${this.escapeHTML(msg.nickname)}</span>
+              <span class="msg-time">${msg.timestamp || ''}</span>
+            </div>
+            <div class="msg-actions">
+              <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
+              <button type="button" class="msg-action-btn btn-msg-react" title="${t('chat_react')}">${t('chat_react')}</button>
+            </div>
           </div>
           ${replyBlock}
           <div class="msg-content-stack">
-            <div class="msg-text">
-              <div class="msg-actions">
-                <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
-                <button type="button" class="msg-action-btn btn-msg-react" title="${t('chat_react')}">${t('chat_react')}</button>
-              </div>
-              ${this.formatChatContent(msg.content, msg.mentions)}
-            </div>
+            <div class="msg-text">${this.formatChatContent(msg.content, msg.mentions)}</div>
             ${reactionsHTML}
           </div>
         </div>
@@ -890,11 +886,6 @@ export class UIManager {
         }
       });
     });
-
-    const timeEl = el.querySelector('.msg-video-time');
-    if (timeEl && msg.videoTime != null && this.chatHandlers.onJumpTime) {
-      timeEl.addEventListener('click', () => this.chatHandlers.onJumpTime(msg.videoTime));
-    }
   }
 
   toggleReactionPicker(msgEl, messageId) {

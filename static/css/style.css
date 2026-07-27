@@ -1722,12 +1722,22 @@ body.theater-mode .floating-reaction img {
   flex-direction: column;
   gap: 2px;
   max-width: 85%;
+  min-width: 0;
+}
+
+.msg-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 18px;
 }
 
 .msg-header {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
 }
 
 .msg-author {
@@ -1742,7 +1752,6 @@ body.theater-mode .floating-reaction img {
 }
 
 .msg-text {
-  position: relative;
   background-color: var(--md-surface-variant);
   padding: 8px 12px;
   border-radius: 4px 14px 14px 14px;
@@ -1752,7 +1761,6 @@ body.theater-mode .floating-reaction img {
 }
 
 .msg-content-stack {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1765,34 +1773,28 @@ body.theater-mode .floating-reaction img {
 }
 
 .msg-actions {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 2;
-  display: flex;
-  gap: 2px;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  background: var(--md-surface);
-  border: 1px solid var(--md-outline);
-  box-shadow: var(--md-shadow-1);
+  display: inline-flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+  white-space: nowrap;
   transition: opacity 0.12s ease, visibility 0.12s ease;
 }
 
 @media (hover: hover) {
-  .msg-text:hover .msg-actions,
-  .msg-content-stack:has(.msg-reaction-picker) .msg-actions {
+  .msg-body:hover .msg-actions,
+  .msg-body:has(.msg-reaction-picker) .msg-actions {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
   }
 }
 
-.msg-text:focus-within .msg-actions,
-.msg-content-stack:focus-within .msg-actions {
+.msg-body:focus-within .msg-actions {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -1853,9 +1855,12 @@ body.theater-mode .floating-reaction img {
   background: transparent;
   color: var(--md-on-surface-variant);
   font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: 4px;
+  white-space: nowrap;
 }
 
 .msg-action-btn:hover {
