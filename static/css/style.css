@@ -465,7 +465,8 @@ body.room-body {
   color: var(--md-on-primary-container);
 }
 
-.support-btn {
+.support-btn,
+.github-btn {
   text-decoration: none;
 }
 
@@ -474,6 +475,21 @@ body.room-body {
   height: 20px;
   object-fit: contain;
   display: block;
+}
+
+.github-logo-img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.github-btn {
+  color: var(--md-on-surface-variant);
+}
+
+.github-btn:hover {
+  color: var(--md-on-surface);
 }
 
 .room-bmc-btn {

@@ -149,6 +149,7 @@ Host/co-host always bypass. Approve/reject moments remain controller-only.
 - Mobile room (≤900px): header → left drawer; Chat/Queue/Viewers → bottom nav.
 - Avatars: render `avatarUrl` in chat + viewers; fall back to initials.
 - BMC: `bmc-button.png` on landing footer only; `bmc-logo.svg` in **room** header only.
+- GitHub: official mark link to `https://github.com/emireln/twintube` in landing + room headers (next to support).
 - Landing Windows download CTA links to `/downloads/TwinTube-Setup.exe` (hidden in desktop app).
 
 ---

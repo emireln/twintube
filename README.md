@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/WebSockets-Gorilla-FF69B4?style=flat" alt="WebSockets">
   <img src="https://img.shields.io/badge/Styling-Material%20Design%203-757575?style=flat&logo=google" alt="Material Design 3">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License">
+  <a href="https://github.com/emireln/twintube"><img src="https://img.shields.io/github/stars/emireln/twintube?style=flat&logo=github" alt="GitHub stars"></a>
   <a href="https://buymeacoffee.com/emireln" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
 </p>
 
@@ -33,7 +34,8 @@
 - **Auth & guests** — JWT + bcrypt accounts, or join as guest; EN/PT UI.
 - **Mobile room UX** — Slim top bar, left drawer for room tools, bottom tabs for Chat / Queue / Viewers.
 - **Windows desktop app** — Electron wrapper around the live site with tray icon and automatic updates ([download](https://twintube.site/downloads/TwinTube-Setup.exe)).
-- **Buy Me a Coffee** — Landing footer button + room-header logo link to [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
+- **Buy Me a Coffee** — Landing footer button + header logo link to [buymeacoffee.com/emireln](https://buymeacoffee.com/emireln).
+- **Open source** — Header GitHub link to [github.com/emireln/twintube](https://github.com/emireln/twintube); see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Docker ready** — Multi-stage image, Compose with PostgreSQL 16, production deploy helpers under `deploy/`.
 
 ---
@@ -61,9 +63,13 @@ twintube/
 ├── Dockerfile
 ├── docker-compose.yml      # App + PostgreSQL
 ├── .env.example
+├── CONTRIBUTING.md         # How to contribute
+├── SECURITY.md             # Vulnerability reporting
+├── AGENTS.md               # Architecture & coding conventions
 ├── desktop/                # Windows Electron client
 ├── downloads/              # Installer artifacts on VPS (mounted into app)
 ├── deploy/                 # Production compose, Caddy/nginx, coturn profile
+├── scripts/                # Version bump, local start/stop, VPS helpers
 ├── internal/
 │   ├── api/                # Rooms API, /api/rtc/config
 │   ├── auth/               # Auth & profile
@@ -134,8 +140,14 @@ If you enjoy TwinTube:
 
 ---
 
+## Contributing
+
+Bug reports, ideas, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues privately per [SECURITY.md](SECURITY.md).
+
+---
+
 ## License
 
 GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE).
 
-For contributor / AI-agent conventions, see [AGENTS.md](AGENTS.md).
+For architecture and coding conventions (including AI-agent guidance), see [AGENTS.md](AGENTS.md).

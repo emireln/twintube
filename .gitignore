@@ -1,15 +1,16 @@
 # Binaries and executables
 *.exe
-*.exe;
 *.dll
 *.so
 *.dylib
-twintube
-twintube.exe
+/twintube
+/twintube.exe
 
 # Desktop build outputs
 desktop/node_modules/
 desktop/dist/
+
+# Runtime installer artifacts (served from VPS volume)
 downloads/*
 !downloads/.gitkeep
 
@@ -19,9 +20,10 @@ uploads/*
 uploads/avatars/*
 !uploads/avatars/.gitkeep
 
-# Environment files
+# Environment / secrets
 .env
 .env.local
+.env.*.local
 
 # Local dev runtime (start/stop scripts)
 .local/
@@ -31,8 +33,9 @@ uploads/avatars/*
 *.sqlite
 *.sqlite3
 
-# Environment files
-.env
+# Go / test
+coverage.out
+*.test
 
 # OS & IDE metadata
 .DS_Store
@@ -40,3 +43,5 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+*.swp
+*~
