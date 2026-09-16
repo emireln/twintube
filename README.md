@@ -21,6 +21,10 @@
 
 ---
 
+This application was developed while I was studying Go and WebSockets, with the help of AI (Cursor & OxAlpha).
+
+---
+
 ## Features
 
 - **Watch together** — Server-authoritative sync over WebSockets with drift correction (&gt;1.5s auto-seek).
@@ -149,5 +153,3 @@ Bug reports, ideas, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIB
 ## WEBSITE
 
 Currently, there is no website for the application, the VPS was for development tests; it is designed for self-hosting. 💡
-
-## This application was developed while I was studying Go and WebSockets, with the help of AI (Cursor & OxAlpha).
