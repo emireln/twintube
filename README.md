@@ -146,12 +146,8 @@ Bug reports, ideas, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIB
 
 ---
 
-## License
-
-GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE).
-
-For architecture and coding conventions (including AI-agent guidance), see [AGENTS.md](AGENTS.md).
-
 ## WEBSITE
 
 Currently, there is no website for the application, the VPS was for development tests; it is designed for self-hosting. 💡
+
+## This application was developed while I was studying Go and WebSockets, with the help of AI (Cursor & OxAlpha).
