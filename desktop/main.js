@@ -48,12 +48,27 @@ function hardenWebContents(contents) {
   }
 }
 
+function isAppOrigin(urlString) {
+	try {
+		return new URL(urlString).origin === new URL(APP_URL).origin;
+	} catch (_) {
+		return false;
+	}
+}
+
 function configureSession() {
   const ses = session.defaultSession;
-  ses.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+  ses.setPermissionRequestHandler((webContents, permission, callback, details = {}) => {
+    const requestingUrl = details.requestingUrl || webContents?.getURL() || '';
+    const mediaTypes = Array.isArray(details.mediaTypes) ? details.mediaTypes : [];
+    const audioOnly = mediaTypes.includes('audio') && !mediaTypes.includes('video');
+    callback(permission === 'media' && audioOnly && isAppOrigin(requestingUrl) && details.isMainFrame !== false);
   });
-  ses.setPermissionCheckHandler(() => false);
+  ses.setPermissionCheckHandler((webContents, permission, requestingOrigin, details = {}) => {
+    const requestingUrl = details.requestingUrl || requestingOrigin || webContents?.getURL() || '';
+    return permission === 'media' && details.mediaType === 'audio' &&
+      isAppOrigin(requestingUrl) && details.isMainFrame !== false;
+  });
   ses.setDevicePermissionHandler(() => false);
 }
 

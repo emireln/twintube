@@ -45,22 +45,24 @@ type WSMessage struct {
 }
 
 type Client struct {
-	ID        string
-	UserID    string
-	RoomID    string
-	Nickname  string
-	IsHost    bool
-	IsCohost  bool
-	IsGuest   bool
-	AvatarURL string
-	RemoteIP  string
-	JoinedAt  time.Time
+	ID            string
+	UserID        string
+	RoomID        string
+	Nickname      string
+	IsHost        bool
+	IsCohost      bool
+	IsGuest       bool
+	AvatarURL     string
+	RemoteIP      string
+	JoinedAt      time.Time
 	VoiceJoined   bool
 	VoiceMuted    bool
 	VoiceSpeaking bool
-	Conn      *websocket.Conn
-	Send      chan WSMessage
-	Room      *Room
+	Conn          *websocket.Conn
+	Send          chan WSMessage
+	sendMu        sync.RWMutex
+	sendClosed    bool
+	Room          *Room
 	// LocalReadyID is the local:<hash> video ID this client has loaded on
 	// their device. Compared against Room.State.VideoID when building the
 	// user list so readiness resets automatically when the video changes.
@@ -68,33 +70,68 @@ type Client struct {
 }
 
 type Room struct {
-	ID            string
-	Name          string
-	IsPrivate     bool
-	OwnerID       string
-	PasswordHash  string
-	ExpiresAt     *time.Time
-	HostID        string
-	State         VideoState
-	Clients       map[string]*Client
-	Playlist      []db.PlaylistItem
-	Moments       []Moment
-	Permissions   RoomPermissions
-	SkipVotes     map[string]bool
-	SkipVideoID   string
-	CohostUserIDs map[string]bool
-	Register      chan *Client
-	Unregister    chan *Client
-	Broadcast     chan WSMessage
+	ID              string
+	Name            string
+	IsPrivate       bool
+	OwnerID         string
+	PasswordHash    string
+	ExpiresAt       *time.Time
+	HostID          string
+	State           VideoState
+	Clients         map[string]*Client
+	Playlist        []db.PlaylistItem
+	Moments         []Moment
+	Permissions     RoomPermissions
+	SkipVotes       map[string]bool
+	SkipVideoID     string
+	CohostUserIDs   map[string]bool
+	Register        chan *Client
+	Unregister      chan *Client
+	Broadcast       chan WSMessage
 	manager         *RoomManager
-	chatLog           []db.ChatMessage
-	chatByID          map[string]chatMessageRef
-	chatReacts        map[string]map[string]map[string]bool
-	hypeBuckets       []hypeBucket
-	stopCh            chan struct{}
-	stopOnce          sync.Once
-	emptyGraceTimer   *time.Timer
-	mu                sync.RWMutex
+	chatLog         []db.ChatMessage
+	chatByID        map[string]chatMessageRef
+	chatReacts      map[string]map[string]map[string]bool
+	hypeBuckets     []hypeBucket
+	stopCh          chan struct{}
+	stopOnce        sync.Once
+	emptyGraceTimer *time.Timer
+	pendingJoins    int
+	destroyed       bool
+	mu              sync.RWMutex
+}
+
+// TrySend sends without blocking and synchronizes with CloseSend so that a
+// client disconnect cannot race a producer into sending on a closed channel.
+func (c *Client) TrySend(message WSMessage) bool {
+	if c == nil {
+		return false
+	}
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+	if c.sendClosed || c.Send == nil {
+		return false
+	}
+	select {
+	case c.Send <- message:
+		return true
+	default:
+		return false
+	}
+}
+
+// CloseSend prevents new sends before closing the writer queue.
+func (c *Client) CloseSend() {
+	if c == nil {
+		return
+	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	if c.sendClosed || c.Send == nil {
+		return
+	}
+	c.sendClosed = true
+	close(c.Send)
 }
 
 func (rm *RoomManager) RemoveRoom(roomID string) {
@@ -216,6 +253,9 @@ func (rm *RoomManager) CreateGuestRoom(roomID, name, passwordHash string, isPriv
 	room.ExpiresAt = nil
 
 	rm.rooms[roomID] = room
+	room.mu.Lock()
+	room.scheduleGuestGraceDestroyLocked()
+	room.mu.Unlock()
 	go room.Run()
 	log.Printf("[ROOM] Created ephemeral guest room %s", roomID)
 	return room
@@ -299,16 +339,54 @@ func (rm *RoomManager) GetOrCreateRoom(roomID string) *Room {
 // OpenExistingRoom returns a room only if it already lives in memory or as a
 // persisted owned room. It never creates phantom rooms from typed URL codes.
 func (rm *RoomManager) OpenExistingRoom(roomID string) *Room {
-	if room := rm.GetRoom(roomID); room != nil {
-		return room
+	rm.mu.Lock()
+	if existing := rm.rooms[roomID]; existing != nil {
+		existing.mu.Lock()
+		if existing.destroyed || (existing.ExpiresAt != nil && !existing.ExpiresAt.After(time.Now())) {
+			existing.mu.Unlock()
+			rm.mu.Unlock()
+			return nil
+		}
+		existing.pendingJoins++
+		existing.cancelGuestGraceDestroyLocked()
+		existing.mu.Unlock()
+		rm.mu.Unlock()
+		return existing
 	}
+	rm.mu.Unlock()
 
 	meta := rm.LookupJoinMeta(roomID)
 	if !meta.Found || meta.Expired {
 		return nil
 	}
 
-	return rm.GetOrCreateRoom(roomID)
+	room := rm.GetOrCreateRoom(roomID)
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if rm.rooms[roomID] != room {
+		return nil
+	}
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	if room.destroyed || (room.ExpiresAt != nil && !room.ExpiresAt.After(time.Now())) {
+		return nil
+	}
+	room.pendingJoins++
+	room.cancelGuestGraceDestroyLocked()
+	return room
+}
+
+// ReleasePendingJoin releases the room reservation when a join is rejected
+// after OpenExistingRoom succeeds but before the client is registered.
+func (r *Room) ReleasePendingJoin() {
+	r.mu.Lock()
+	if r.pendingJoins > 0 {
+		r.pendingJoins--
+	}
+	if r.OwnerID == "" && len(r.Clients) == 0 && r.pendingJoins == 0 {
+		r.scheduleGuestGraceDestroyLocked()
+	}
+	r.mu.Unlock()
 }
 
 // SendTo delivers a message to one client without evicting them on buffer pressure.
@@ -317,15 +395,7 @@ func (r *Room) SendTo(clientID string, message WSMessage) bool {
 	r.mu.RLock()
 	client := r.Clients[clientID]
 	r.mu.RUnlock()
-	if client == nil {
-		return false
-	}
-	select {
-	case client.Send <- message:
-		return true
-	default:
-		return false
-	}
+	return client.TrySend(message)
 }
 
 func (r *Room) cancelGuestGraceDestroyLocked() {
@@ -336,7 +406,7 @@ func (r *Room) cancelGuestGraceDestroyLocked() {
 }
 
 func (r *Room) scheduleGuestGraceDestroyLocked() {
-	if r.OwnerID != "" || len(r.Clients) > 0 {
+	if r.OwnerID != "" || len(r.Clients) > 0 || r.pendingJoins > 0 || r.destroyed {
 		return
 	}
 	r.cancelGuestGraceDestroyLocked()
@@ -355,24 +425,28 @@ func (r *Room) stopRun() {
 }
 
 func (r *Room) destroyEphemeralAfterGrace(roomID string) {
+	manager := r.manager
+	if manager == nil {
+		manager = Manager
+	}
+	manager.mu.Lock()
 	r.mu.Lock()
-	if r.OwnerID != "" || len(r.Clients) > 0 {
+	if manager.rooms[roomID] != r || r.OwnerID != "" || len(r.Clients) > 0 || r.pendingJoins > 0 || r.destroyed {
 		r.mu.Unlock()
+		manager.mu.Unlock()
 		return
 	}
 	r.cancelGuestGraceDestroyLocked()
+	r.destroyed = true
+	delete(manager.rooms, roomID)
+	r.stopOnce.Do(func() { close(r.stopCh) })
 	r.mu.Unlock()
+	manager.mu.Unlock()
 
 	if db.Database != nil {
 		_ = db.Database.DeleteEphemeralRoomData(roomID)
 	}
-	if r.manager != nil {
-		r.manager.RemoveRoom(roomID)
-	} else {
-		Manager.RemoveRoom(roomID)
-	}
 	log.Printf("[ROOM] Destroyed ephemeral room %s after grace period", roomID)
-	r.stopRun()
 }
 
 func (r *Room) Run() {
@@ -383,6 +457,14 @@ func (r *Room) Run() {
 
 		case client := <-r.Register:
 			r.mu.Lock()
+			if r.pendingJoins > 0 {
+				r.pendingJoins--
+			}
+			if r.destroyed {
+				r.mu.Unlock()
+				client.TrySend(WSMessage{Action: "ERROR", Payload: json.RawMessage(`{"message":"Room is no longer available."}`)})
+				continue
+			}
 			if client.JoinedAt.IsZero() {
 				client.JoinedAt = time.Now()
 			}
@@ -432,7 +514,7 @@ func (r *Room) Run() {
 			r.mu.Lock()
 			if _, ok := r.Clients[client.ID]; ok {
 				delete(r.Clients, client.ID)
-				close(client.Send)
+				client.CloseSend()
 				GlobalPresence.Unregister(client)
 				leftNickname = client.Nickname
 				if r.SkipVotes != nil {
@@ -495,11 +577,7 @@ func (r *Room) deliver(message WSMessage) {
 	r.mu.RUnlock()
 
 	for _, client := range clients {
-		select {
-		case client.Send <- message:
-		default:
-			// Drop for this client; keep them connected.
-		}
+		client.TrySend(message)
 	}
 }
 
@@ -544,13 +622,13 @@ func (r *Room) SendInitState(client *Client) {
 	}
 
 	statePayload := map[string]interface{}{
-		"roomId":   r.ID,
-		"clientId": client.ID,
-		"isHost":   client.IsHost,
-		"isCohost": client.IsCohost,
-		"isGuest":  client.IsGuest,
-		"hostId":   r.HostID,
-		"role":     client.RoleName(),
+		"roomId":             r.ID,
+		"clientId":           client.ID,
+		"isHost":             client.IsHost,
+		"isCohost":           client.IsCohost,
+		"isGuest":            client.IsGuest,
+		"hostId":             r.HostID,
+		"role":               client.RoleName(),
 		"canControlPlayback": meta["canControlPlayback"],
 		"canModerateQueue":   meta["canModerateQueue"],
 		"canAddQueue":        meta["canAddQueue"],
@@ -582,25 +660,18 @@ func (r *Room) SendInitState(client *Client) {
 	r.mu.Unlock()
 
 	raw, _ := json.Marshal(statePayload)
-	select {
-	case client.Send <- WSMessage{
+	client.TrySend(WSMessage{
 		Action:    "INIT_STATE",
 		Payload:   raw,
 		Timestamp: nowMs,
-	}:
-	default:
-		log.Printf("[ROOM %s] Failed to send INIT_STATE to %s (send buffer full)", r.ID, client.Nickname)
-	}
+	})
 
 	if len(history) > 0 {
 		rawHistory, _ := json.Marshal(history)
-		select {
-		case client.Send <- WSMessage{
+		client.TrySend(WSMessage{
 			Action:  "CHAT_HISTORY",
 			Payload: rawHistory,
-		}:
-		default:
-		}
+		})
 	}
 }
 

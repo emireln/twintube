@@ -31,6 +31,22 @@ func TestGuestRoomSurvivesGracePeriod(t *testing.T) {
 	}
 }
 
+func TestUnjoinedGuestRoomIsRemovedAfterGracePeriod(t *testing.T) {
+	prev := GuestRoomGracePeriod
+	GuestRoomGracePeriod = 20 * time.Millisecond
+	t.Cleanup(func() { GuestRoomGracePeriod = prev })
+
+	rm := newTestManager()
+	rm.CreateGuestRoom("grace00", "Unjoined", "", false)
+	deadline := time.Now().Add(time.Second)
+	for rm.GetRoom("grace00") != nil && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if rm.GetRoom("grace00") != nil {
+		t.Fatal("unjoined guest room should be removed after the grace period")
+	}
+}
+
 func TestGuestRoomGraceCancelledOnRejoin(t *testing.T) {
 	prev := GuestRoomGracePeriod
 	GuestRoomGracePeriod = 200 * time.Millisecond
@@ -89,4 +105,30 @@ func TestOpenExistingRoomReturnsGuestRoom(t *testing.T) {
 	if got == nil || got.ID != "guest001" {
 		t.Fatalf("expected existing guest room, got %+v", got)
 	}
+	got.ReleasePendingJoin()
+}
+
+func TestClientSendAndCloseAreSafeConcurrently(t *testing.T) {
+	client := &Client{Send: make(chan WSMessage, 4)}
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			for j := 0; j < 100; j++ {
+				client.TrySend(WSMessage{Action: "test"})
+			}
+		}()
+	}
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		<-start
+		client.CloseSend()
+	}()
+	close(start)
+	workers.Wait()
+	client.CloseSend()
 }

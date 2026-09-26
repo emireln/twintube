@@ -10,17 +10,17 @@ import (
 )
 
 type Moment struct {
-	ID               string    `json:"id"`
-	RoomID           string    `json:"roomId"`
-	CreatorClientID  string    `json:"creatorClientId,omitempty"`
-	CreatorUserID    string    `json:"creatorUserId,omitempty"`
-	CreatorNickname  string    `json:"creatorNickname"`
-	VideoID          string    `json:"videoId"`
-	Platform         string    `json:"platform,omitempty"`
-	AtSeconds        float64   `json:"atSeconds"`
-	Label            string    `json:"label,omitempty"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"createdAt"`
+	ID              string    `json:"id"`
+	RoomID          string    `json:"roomId"`
+	CreatorClientID string    `json:"creatorClientId,omitempty"`
+	CreatorUserID   string    `json:"creatorUserId,omitempty"`
+	CreatorNickname string    `json:"creatorNickname"`
+	VideoID         string    `json:"videoId"`
+	Platform        string    `json:"platform,omitempty"`
+	AtSeconds       float64   `json:"atSeconds"`
+	Label           string    `json:"label,omitempty"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"createdAt"`
 }
 
 func (r *Room) SubmitMoment(from *Client, atSeconds float64, label string) (Moment, bool) {
@@ -130,10 +130,7 @@ func (r *Room) NotifyApproversPending(m Moment) {
 	defer r.mu.RUnlock()
 	for _, c := range r.Clients {
 		if c.isController() {
-			select {
-			case c.Send <- msg:
-			default:
-			}
+			c.TrySend(msg)
 		}
 	}
 }

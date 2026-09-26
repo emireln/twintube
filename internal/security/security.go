@@ -15,13 +15,30 @@ const defaultJWTSecret = "twintube_default_super_secret_vps_key_change_me"
 // ValidateJWTSecret warns or exits when the signing key is missing in production.
 func ValidateJWTSecret() {
 	secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
-	if secret != "" && secret != defaultJWTSecret {
+	if validJWTSecret(secret) {
 		return
 	}
 	if isProduction() {
-		log.Fatal("[SECURITY] JWT_SECRET must be set to a strong random value in production")
+		log.Fatal("[SECURITY] JWT_SECRET must be at least 32 bytes, non-placeholder, and contain sufficient character diversity in production")
 	}
-	log.Println("[SECURITY] WARNING: Using default JWT secret — set JWT_SECRET before deploying")
+	log.Println("[SECURITY] WARNING: JWT_SECRET is weak or unset — set a random value of at least 32 bytes before deploying")
+}
+
+func validJWTSecret(secret string) bool {
+	if len(secret) < 32 || secret == defaultJWTSecret {
+		return false
+	}
+	lower := strings.ToLower(secret)
+	for _, marker := range []string{"change_me", "change-this", "change_this", "your_super", "your_secret", "placeholder", "example", "replace_me", "password"} {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	unique := make(map[rune]struct{})
+	for _, ch := range secret {
+		unique[ch] = struct{}{}
+	}
+	return len(unique) >= 12
 }
 
 func isProduction() bool {
@@ -77,10 +94,11 @@ type rateBucket struct {
 }
 
 type RateLimiter struct {
-	mu       sync.Mutex
-	limit    int
-	window   time.Duration
-	byIP     map[string]*rateBucket
+	mu        sync.Mutex
+	limit     int
+	window    time.Duration
+	byIP      map[string]*rateBucket
+	cleanupAt time.Time
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
@@ -92,18 +110,61 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 }
 
 func ClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
-		return strings.TrimSpace(xrip)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
+	peer := parseIPValue(r.RemoteAddr)
+	if peer == nil {
 		return r.RemoteAddr
 	}
-	return host
+	if !isTrustedProxy(peer) {
+		return peer.String()
+	}
+
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := parseIPValue(parts[i])
+			if ip == nil {
+				continue
+			}
+			if !isTrustedProxy(ip) {
+				return ip.String()
+			}
+		}
+	}
+	if xrip := parseIPValue(r.Header.Get("X-Real-IP")); xrip != nil && !isTrustedProxy(xrip) {
+		return xrip.String()
+	}
+	return peer.String()
+}
+
+func parseIPValue(value string) net.IP {
+	value = strings.TrimSpace(value)
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	value = strings.Trim(value, "[]")
+	return net.ParseIP(value)
+}
+
+func isTrustedProxy(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	for _, entry := range strings.Split(os.Getenv("TRUSTED_PROXIES"), ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if trustedIP := net.ParseIP(entry); trustedIP != nil && trustedIP.Equal(ip) {
+			return true
+		}
+		if _, network, err := net.ParseCIDR(entry); err == nil && network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func (rl *RateLimiter) Allow(ip string) bool {
@@ -111,6 +172,14 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	defer rl.mu.Unlock()
 
 	now := time.Now()
+	if rl.cleanupAt.IsZero() || now.Sub(rl.cleanupAt) >= rl.window {
+		for key, bucket := range rl.byIP {
+			if now.Sub(bucket.windowAt) >= rl.window {
+				delete(rl.byIP, key)
+			}
+		}
+		rl.cleanupAt = now
+	}
 	b, ok := rl.byIP[ip]
 	if !ok || now.Sub(b.windowAt) >= rl.window {
 		rl.byIP[ip] = &rateBucket{count: 1, windowAt: now}

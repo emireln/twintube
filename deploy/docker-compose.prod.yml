@@ -13,9 +13,11 @@ services:
       - ../.env
     environment:
       PORT: "8080"
+      ENV: production
       APP_DOMAIN: twintube.site
       DOWNLOADS_DIR: /downloads
       AVATARS_DIR: /uploads/avatars
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-127.0.0.1/32,::1/128}"
       TZ: ${TZ:-America/Sao_Paulo}
     volumes:
       - ../downloads:/downloads:ro

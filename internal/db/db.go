@@ -83,17 +83,29 @@ func InitDB(defaultSQLitePath string) (*DB, error) {
 			connStr = databaseURL
 		} else {
 			host := os.Getenv("POSTGRES_HOST")
-			if host == "" { host = "localhost" }
+			if host == "" {
+				host = "localhost"
+			}
 			port := os.Getenv("POSTGRES_PORT")
-			if port == "" { port = "5432" }
+			if port == "" {
+				port = "5432"
+			}
 			user := os.Getenv("POSTGRES_USER")
-			if user == "" { user = "twintube" }
+			if user == "" {
+				user = "twintube"
+			}
 			pass := os.Getenv("POSTGRES_PASSWORD")
-			if pass == "" { pass = "postgres" }
+			if pass == "" {
+				pass = "postgres"
+			}
 			dbname := os.Getenv("POSTGRES_DB")
-			if dbname == "" { dbname = "twintube" }
+			if dbname == "" {
+				dbname = "twintube"
+			}
 			sslmode := os.Getenv("POSTGRES_SSLMODE")
-			if sslmode == "" { sslmode = "disable" }
+			if sslmode == "" {
+				sslmode = "disable"
+			}
 
 			connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 				host, port, user, pass, dbname, sslmode)
@@ -726,6 +738,26 @@ func (d *DB) ListRoomsByOwner(ownerID string) ([]RoomRecord, error) {
 func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if ownerID == "" {
+		return fmt.Errorf("room not found or unauthorized")
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var actualOwner string
+	if err := tx.QueryRow(d.Rebind(`SELECT owner_id FROM rooms WHERE id = ?;`), id).Scan(&actualOwner); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("room not found or unauthorized")
+		}
+		return err
+	}
+	if actualOwner != ownerID {
+		return fmt.Errorf("room not found or unauthorized")
+	}
 
 	for _, q := range []string{
 		`DELETE FROM message_reactions WHERE room_id = ?;`,
@@ -733,13 +765,13 @@ func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
 		`DELETE FROM playlist_items WHERE room_id = ?;`,
 		`DELETE FROM moments WHERE room_id = ?;`,
 	} {
-		if _, err := d.db.Exec(d.Rebind(q), id); err != nil {
+		if _, err := tx.Exec(d.Rebind(q), id); err != nil {
 			return err
 		}
 	}
 
 	query := d.Rebind(`DELETE FROM rooms WHERE id = ? AND owner_id = ?;`)
-	res, err := d.db.Exec(query, id, ownerID)
+	res, err := tx.Exec(query, id, ownerID)
 	if err != nil {
 		return err
 	}
@@ -747,7 +779,7 @@ func (d *DB) DeleteOwnedRoom(id, ownerID string) error {
 	if rows == 0 {
 		return fmt.Errorf("room not found or unauthorized")
 	}
-	return nil
+	return tx.Commit()
 }
 
 // DeleteEphemeralRoomData removes all DB rows for a guest/ephemeral room (no owner).

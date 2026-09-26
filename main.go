@@ -362,10 +362,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.IsGuest = false
 		room.GlobalPresence.Register(c)
 		raw, _ := json.Marshal(map[string]bool{"ok": true})
-		select {
-		case c.Send <- room.WSMessage{Action: "PRESENCE_OK", Payload: raw}:
-		default:
-		}
+		c.TrySend(room.WSMessage{Action: "PRESENCE_OK", Payload: raw})
 
 	case "JOIN_ROOM":
 		if c.Room != nil {
@@ -452,6 +449,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			return
 		}
 		if target.IsExpired() {
+			target.ReleasePendingJoin()
 			room.Manager.RemoveRoom(payload.RoomID)
 			denyRoomJoin(c, "This room has expired.")
 			return
@@ -820,10 +818,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.PersistMoment(m)
 		c.Room.NotifyApproversPending(m)
 		rawAck, _ := json.Marshal(m)
-		select {
-		case c.Send <- room.WSMessage{Action: "MOMENT_SUBMITTED", Payload: rawAck}:
-		default:
-		}
+		c.TrySend(room.WSMessage{Action: "MOMENT_SUBMITTED", Payload: rawAck})
 
 	case "APPROVE_MOMENT":
 		if c.Room == nil {
@@ -961,14 +956,14 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		allowed := map[string]bool{
-			"happy.webp":           true,
-			"energetic.webp":       true,
-			"stressed.webp":        true,
-			"tired.webp":           true,
-			"heart.webp":           true,
-			"lmao.webp":            true,
-			"popcorn.webp":         true,
-			"monkey-no-look.webp":  true,
+			"happy.webp":          true,
+			"energetic.webp":      true,
+			"stressed.webp":       true,
+			"tired.webp":          true,
+			"heart.webp":          true,
+			"lmao.webp":           true,
+			"popcorn.webp":        true,
+			"monkey-no-look.webp": true,
 		}
 		if !allowed[payload.Reaction] {
 			return
@@ -1020,11 +1015,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		raw, _ := json.Marshal(statePayload)
-		c.Send <- room.WSMessage{
+		c.TrySend(room.WSMessage{
 			Action:    "STATE_UPDATE",
 			Payload:   raw,
 			Timestamp: nowMs,
-		}
+		})
 	}
 }
 
@@ -1040,10 +1035,7 @@ func formatMomentTime(seconds float64) string {
 
 func sendError(c *room.Client, message string) {
 	raw, _ := json.Marshal(map[string]string{"message": message})
-	select {
-	case c.Send <- room.WSMessage{Action: "ERROR", Payload: raw}:
-	default:
-	}
+	c.TrySend(room.WSMessage{Action: "ERROR", Payload: raw})
 }
 
 func denyRoomJoin(c *room.Client, message string) {

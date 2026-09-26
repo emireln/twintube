@@ -44,11 +44,11 @@ func (h *PresenceHub) Unregister(c *Client) {
 }
 
 type CoWatcherRoomPayload struct {
-	RoomID         string `json:"roomId"`
-	RoomName       string `json:"roomName"`
-	HostNickname   string `json:"hostNickname"`
-	HostUserID     string `json:"hostUserId"`
-	URL            string `json:"url"`
+	RoomID       string `json:"roomId"`
+	RoomName     string `json:"roomName"`
+	HostNickname string `json:"hostNickname"`
+	HostUserID   string `json:"hostUserId"`
+	URL          string `json:"url"`
 }
 
 // NotifyCoWatchersRoomStarted alerts online peers when someone they watched with opens a room.
@@ -78,19 +78,16 @@ func (h *PresenceHub) NotifyCoWatchersRoomStarted(hostUserID, hostNickname, room
 			continue
 		}
 		for _, client := range h.byUser[peerID] {
-			select {
-			case client.Send <- WSMessage{Action: "COWATCHER_ROOM", Payload: raw}:
-			default:
-			}
+			client.TrySend(WSMessage{Action: "COWATCHER_ROOM", Payload: raw})
 		}
 	}
 }
 
 type MentionNotifyPayload struct {
-	RoomID   string `json:"roomId"`
+	RoomID    string `json:"roomId"`
 	MessageID string `json:"messageId"`
-	From     string `json:"from"`
-	Content  string `json:"content"`
+	From      string `json:"from"`
+	Content   string `json:"content"`
 }
 
 // SendMentionNotify delivers a mention alert to one client.
@@ -109,8 +106,5 @@ func SendMentionNotify(client *Client, roomID string, msg db.ChatMessage) {
 		Content:   snippet,
 	}
 	raw, _ := json.Marshal(payload)
-	select {
-	case client.Send <- WSMessage{Action: "MENTION_NOTIFY", Payload: raw}:
-	default:
-	}
+	client.TrySend(WSMessage{Action: "MENTION_NOTIFY", Payload: raw})
 }

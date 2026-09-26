@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +18,7 @@ import (
 )
 
 var roomAccessLimiter = security.NewRateLimiter(20, 5*time.Minute)
+var roomCreateLimiter = security.NewRateLimiter(10, 5*time.Minute)
 
 type RoomAPIHandler struct {
 	Manager *room.RoomManager
@@ -38,14 +41,32 @@ type CreateRoomResponse struct {
 }
 
 func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if !roomCreateLimiter.Allow(security.ClientIP(r)) {
+		w.Header().Set("Retry-After", "300")
+		http.Error(w, `{"error":"Too many room creation requests. Please try again later."}`, http.StatusTooManyRequests)
 		return
 	}
 
 	var req CreateRoomRequest
-	if r.Method == http.MethodPost && r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || contentType != "application/json" || r.Body == nil {
+		http.Error(w, `{"error":"Content-Type must be application/json"}`, http.StatusBadRequest)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+	var trailing interface{}
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
+		return
 	}
 
 	var userID string
