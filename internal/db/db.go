@@ -149,6 +149,9 @@ func InitDB(defaultSQLitePath string) (*DB, error) {
 	if err := dbWrapper.CleanupOrphanRooms(); err != nil {
 		log.Printf("[DB] orphan room cleanup note: %v", err)
 	}
+	if err := dbWrapper.PurgeExpiredRooms(time.Now()); err != nil {
+		log.Printf("[DB] expired room cleanup note: %v", err)
+	}
 
 	Database = dbWrapper
 	log.Printf("[DB] Successfully initialized %s database connection", strings.ToUpper(string(dbType)))
@@ -660,6 +663,12 @@ func (d *DB) CreateRoomRecord(id, name, ownerID, pwdHash string, isPrivate bool,
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
+	// Store expiry in UTC. SQLite compares timestamps as text, so mixed offsets would misorder them.
+	if expiresAt != nil {
+		utc := expiresAt.UTC()
+		expiresAt = &utc
+	}
+
 	hostID := ownerID
 	if hostID == "" {
 		hostID = "system"
@@ -711,12 +720,35 @@ func (d *DB) GetRoomByID(id string) (*RoomRecord, error) {
 	return &rec, nil
 }
 
+// PurgeExpiredRooms deletes saved rooms whose expiry has passed, together with their
+// messages, queue, moments, and reactions. Joins and listings already ignore expired
+// rooms; this keeps the database from growing without bound.
+func (d *DB) PurgeExpiredRooms(now time.Time) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	now = now.UTC()
+	const expiredRooms = `owner_id IS NOT NULL AND owner_id != '' AND expires_at IS NOT NULL AND expires_at <= ?`
+	for _, q := range []string{
+		`DELETE FROM message_reactions WHERE room_id IN (SELECT id FROM rooms WHERE ` + expiredRooms + `);`,
+		`DELETE FROM messages WHERE room_id IN (SELECT id FROM rooms WHERE ` + expiredRooms + `);`,
+		`DELETE FROM playlist_items WHERE room_id IN (SELECT id FROM rooms WHERE ` + expiredRooms + `);`,
+		`DELETE FROM moments WHERE room_id IN (SELECT id FROM rooms WHERE ` + expiredRooms + `);`,
+		`DELETE FROM rooms WHERE ` + expiredRooms + `;`,
+	} {
+		if _, err := d.db.Exec(d.Rebind(q), now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *DB) ListRoomsByOwner(ownerID string) ([]RoomRecord, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	query := d.Rebind(`SELECT id, name, owner_id, password_hash, is_private, expires_at, created_at FROM rooms WHERE owner_id = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY created_at DESC;`)
-	rows, err := d.db.Query(query, ownerID)
+	query := d.Rebind(`SELECT id, name, owner_id, password_hash, is_private, expires_at, created_at FROM rooms WHERE owner_id = ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC;`)
+	rows, err := d.db.Query(query, ownerID, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
