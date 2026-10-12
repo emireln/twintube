@@ -1,6 +1,7 @@
 /* TwinTube - Universal Video Player Controller & Sync Engine */
 
 import { getLocalBlobUrl, isLocalVideoId } from './localmedia.js';
+import { serverNowMs } from './clock.js';
 
 /** Only absolute http(s) URLs may reach an iframe or media element. */
 export function isSafeWebUrl(value) {
@@ -401,11 +402,11 @@ export class VideoPlayer {
     const pending = this.pendingLocalState;
     this.pendingLocalState = null;
     const vs = { ...(pending.videoState || {}) };
-    const stamp = pending.serverTimestamp || vs.serverTimestamp || Date.now();
+    const stamp = pending.serverTimestamp || vs.serverTimestamp || serverNowMs();
     let expectedTime = typeof vs.currentTime === 'number' ? vs.currentTime : 0;
     // Always recompute absolute time so late matchers catch up to live playhead.
     if ((vs.status || 'PAUSED') === 'PLAYING' && stamp) {
-      const elapsedSec = (Date.now() - stamp) / 1000.0;
+      const elapsedSec = (serverNowMs() - stamp) / 1000.0;
       if (elapsedSec > 0 && elapsedSec < 3600) expectedTime += elapsedSec;
     }
     vs.currentTime = expectedTime;
@@ -443,7 +444,7 @@ export class VideoPlayer {
 
     const stamp = videoState.serverTimestamp || serverTimestamp;
     if (!timeAlreadyAbsolute && status === 'PLAYING' && stamp) {
-      const elapsedSec = (Date.now() - stamp) / 1000.0;
+      const elapsedSec = (serverNowMs() - stamp) / 1000.0;
       if (elapsedSec > 0 && elapsedSec < 3600) {
         expectedTime += elapsedSec;
       }

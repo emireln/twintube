@@ -1,5 +1,7 @@
 /* TwinTube - WebSocket Client Engine */
 
+import { observeServerTime } from './clock.js';
+
 export class WSClient {
   constructor() {
     this.ws = null;
@@ -35,6 +37,9 @@ export class WSClient {
     this.ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (typeof msg.timestamp === 'number') {
+          observeServerTime(msg.timestamp);
+        }
         if (msg.action) {
           let payload = msg.payload;
           if (typeof payload === 'string') {
