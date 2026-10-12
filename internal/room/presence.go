@@ -3,8 +3,10 @@ package room
 import (
 	"encoding/json"
 	"sync"
+	"unicode/utf8"
 
 	"twintube/internal/db"
+	"twintube/internal/utils"
 )
 
 // PresenceHub tracks online authenticated users for cross-room notifications.
@@ -96,8 +98,8 @@ func SendMentionNotify(client *Client, roomID string, msg db.ChatMessage) {
 		return
 	}
 	snippet := msg.Content
-	if len(snippet) > 120 {
-		snippet = snippet[:120] + "…"
+	if utf8.RuneCountInString(snippet) > 120 {
+		snippet = utils.TruncateRunes(snippet, 120) + "…"
 	}
 	payload := MentionNotifyPayload{
 		RoomID:    roomID,

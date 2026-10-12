@@ -20,6 +20,10 @@ import (
 var roomAccessLimiter = security.NewRateLimiter(20, 5*time.Minute)
 var roomCreateLimiter = security.NewRateLimiter(10, 5*time.Minute)
 
+// maxRoomNameRunes caps room display names. Saved names are stored in VARCHAR(255)
+// on PostgreSQL, so longer names would fail the insert.
+const maxRoomNameRunes = 100
+
 type RoomAPIHandler struct {
 	Manager *room.RoomManager
 }
@@ -83,7 +87,7 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 	}
 
 	roomID := utils.GenerateRoomCode()
-	req.Name = strings.TrimSpace(req.Name)
+	req.Name = utils.TruncateRunes(strings.TrimSpace(req.Name), maxRoomNameRunes)
 	if req.Name == "" {
 		req.Name = "Room " + roomID
 	}

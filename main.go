@@ -515,9 +515,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		content := strings.TrimSpace(payload.Content)
-		if len(content) > 500 {
-			content = content[:500]
-		}
+		content = utils.TruncateRunes(content, 500)
 
 		var videoTime *float64
 		if payload.VideoTime != nil && *payload.VideoTime >= 0 {
@@ -596,9 +594,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 
 		title := info.Title
 		if t := strings.TrimSpace(payload.Title); t != "" && (info.Platform == "local" || info.Platform == "direct" || info.Platform == "hls") {
-			if len(t) > 200 {
-				t = t[:200]
-			}
+			t = utils.TruncateRunes(t, 200)
 			title = t
 		}
 

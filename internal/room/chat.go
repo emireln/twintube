@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"twintube/internal/db"
 	"twintube/internal/utils"
@@ -48,10 +49,10 @@ func AllowedChatEmoji(emoji string) bool {
 
 func truncateChatPreview(content string) string {
 	content = strings.TrimSpace(content)
-	if len(content) <= 80 {
+	if utf8.RuneCountInString(content) <= 80 {
 		return content
 	}
-	return content[:80] + "…"
+	return utils.TruncateRunes(content, 80) + "…"
 }
 
 func (r *Room) rememberChatMessage(msg db.ChatMessage) {

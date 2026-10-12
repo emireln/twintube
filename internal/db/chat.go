@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
+
+	"twintube/internal/utils"
 )
 
 func (d *DB) migrateChatColumns() error {
@@ -216,8 +219,8 @@ func (d *DB) lookupReplyPreviewLocked(roomID, replyToID string) (string, string)
 	if err != nil {
 		return "", ""
 	}
-	if len(content) > 80 {
-		content = content[:80] + "…"
+	if utf8.RuneCountInString(content) > 80 {
+		content = utils.TruncateRunes(content, 80) + "…"
 	}
 	return nick, content
 }

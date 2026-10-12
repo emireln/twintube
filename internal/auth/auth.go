@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -113,6 +114,13 @@ func ParseJWTToken(tokenString string) (*Claims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
+// validUsernameLength accepts 3 to 25 characters. The count is in characters, not
+// bytes, so accented names are not rejected for their UTF-8 size.
+func validUsernameLength(name string) bool {
+	n := utf8.RuneCountInString(name)
+	return n >= 3 && n <= 25
+}
+
 func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -129,7 +137,7 @@ func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	req.Password = strings.TrimSpace(req.Password)
 
-	if len(req.Username) < 3 || len(req.Username) > 25 {
+	if !validUsernameLength(req.Username) {
 		http.Error(w, `{"error":"Username must be between 3 and 25 characters"}`, http.StatusBadRequest)
 		return
 	}
@@ -352,7 +360,7 @@ func HandleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	req.AvatarURL = strings.TrimSpace(req.AvatarURL)
 
-	if len(req.Username) < 3 || len(req.Username) > 25 {
+	if !validUsernameLength(req.Username) {
 		writeJSONError(w, "Username must be between 3 and 25 characters", http.StatusBadRequest)
 		return
 	}

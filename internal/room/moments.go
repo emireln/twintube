@@ -36,9 +36,7 @@ func (r *Room) SubmitMoment(from *Client, atSeconds float64, label string) (Mome
 		atSeconds = 0
 	}
 	label = strings.TrimSpace(label)
-	if len(label) > 120 {
-		label = label[:120]
-	}
+	label = utils.TruncateRunes(label, 120)
 	m := Moment{
 		ID:              utils.GenerateRandomID(8),
 		RoomID:          r.ID,
