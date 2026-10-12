@@ -284,6 +284,7 @@ func clientReadPump(c *room.Client) {
 		return nil
 	})
 
+	limiter := security.NewMessageLimiter(messagesPerSecond, messageBurst)
 	for {
 		_, messageBytes, err := c.Conn.ReadMessage()
 		if err != nil {
@@ -295,8 +296,25 @@ func clientReadPump(c *room.Client) {
 			continue
 		}
 
+		// Excess messages are dropped so one connection cannot flood a room's fan-out.
+		if !isSignalingAction(msg.Action) && !limiter.Allow() {
+			continue
+		}
+
 		handleIncomingAction(c, msg)
 	}
+}
+
+// Per-connection message budget. Chat, queue, and playback actions fan out to the
+// whole room, so a flood from one client multiplies. Signaling is targeted and
+// arrives in bursts when voice connects, so it is exempt.
+const (
+	messagesPerSecond = 20
+	messageBurst      = 80
+)
+
+func isSignalingAction(action string) bool {
+	return action == "RTC_OFFER" || action == "RTC_ANSWER" || action == "RTC_ICE"
 }
 
 func clientWritePump(c *room.Client) {
