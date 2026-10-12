@@ -961,16 +961,28 @@ func (r *Room) Configure(name string, isPrivate bool, ownerID, passwordHash stri
 	r.ExpiresAt = expiresAt
 }
 
-func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem) {
+// maxPlaylistItems bounds a room's queue. Every change rebroadcasts the whole queue,
+// so an unbounded queue makes each addition more expensive for everyone.
+const maxPlaylistItems = 500
+
+// AppendPlaylistItem adds an item to the end of the queue. ok is false, and nothing is
+// added, when the queue is full.
+func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	out := make([]db.PlaylistItem, len(r.Playlist))
+	copy(out, r.Playlist)
+	if len(r.Playlist) >= maxPlaylistItems {
+		return item, out, false
+	}
 
 	item.Position = len(r.Playlist)
 	r.Playlist = append(r.Playlist, item)
 
-	out := make([]db.PlaylistItem, len(r.Playlist))
+	out = make([]db.PlaylistItem, len(r.Playlist))
 	copy(out, r.Playlist)
-	return item, out
+	return item, out, true
 }
 
 func (r *Room) PlayNextPlaylistItem() (db.PlaylistItem, []db.PlaylistItem, bool) {

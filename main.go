@@ -640,7 +640,11 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			SourceURL:    info.SourceURL,
 			Seekable:     info.Seekable,
 		}
-		item, playlist := c.Room.AppendPlaylistItem(item)
+		item, playlist, added := c.Room.AppendPlaylistItem(item)
+		if !added {
+			sendError(c, "queue_full")
+			return
+		}
 		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.SavePlaylistItem(item)
 		}
