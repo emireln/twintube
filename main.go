@@ -562,7 +562,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			videoTime = &t
 		}
 
-		update, hype := c.Room.ToggleChatReaction(c, payload.MessageID, payload.Emoji, videoTime)
+		update, hype, ok := c.Room.ToggleChatReaction(c, payload.MessageID, payload.Emoji, videoTime)
+		if !ok {
+			return
+		}
 		c.Room.BroadcastChatReaction(update)
 		if hype != nil {
 			c.Room.BroadcastHypeBurst(*hype)

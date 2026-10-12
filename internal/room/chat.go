@@ -236,20 +236,23 @@ type ChatReactionUpdate struct {
 	VideoTime *float64       `json:"videoTime,omitempty"`
 }
 
-func (r *Room) ToggleChatReaction(client *Client, messageID, emoji string, videoTime *float64) (ChatReactionUpdate, *HypeBurst) {
-	update := ChatReactionUpdate{MessageID: messageID, Emoji: emoji, ClientID: client.ID}
+// ToggleChatReaction flips a client's reaction on a chat line. ok is false when the
+// emoji is not allowed or the message is not in the room's chat log, in which case
+// nothing changed and there is nothing to broadcast.
+func (r *Room) ToggleChatReaction(client *Client, messageID, emoji string, videoTime *float64) (update ChatReactionUpdate, hype *HypeBurst, ok bool) {
+	update = ChatReactionUpdate{MessageID: messageID, Emoji: emoji, ClientID: client.ID}
 	if !AllowedChatEmoji(emoji) {
-		return update, nil
+		return update, nil, false
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.chatByID == nil {
-		return update, nil
+		return update, nil, false
 	}
-	if _, ok := r.chatByID[messageID]; !ok {
-		return update, nil
+	if _, found := r.chatByID[messageID]; !found {
+		return update, nil, false
 	}
 
 	if r.chatReacts == nil {
@@ -291,12 +294,11 @@ func (r *Room) ToggleChatReaction(client *Client, messageID, emoji string, video
 		}
 	}
 
-	var hype *HypeBurst
 	if added && videoTime != nil && *videoTime >= 0 {
 		hype = r.trackHypeLocked(emoji, *videoTime)
 	}
 
-	return update, hype
+	return update, hype, true
 }
 
 func aggregateReactionCounts(byEmoji map[string]map[string]bool) map[string]int {
