@@ -55,6 +55,26 @@ func TestClientIPWalksTrustedForwardedChain(t *testing.T) {
 	}
 }
 
+// Inline scripts would also execute javascript: URLs, which the player can
+// receive from room state, so script-src must never allow 'unsafe-inline'.
+func TestCSPForbidsInlineScripts(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	ApplyHeaders(recorder, httptest.NewRequest("GET", "http://example.test/", nil))
+	csp := recorder.Header().Get("Content-Security-Policy")
+	var scriptSrc string
+	for _, directive := range strings.Split(csp, ";") {
+		if d := strings.TrimSpace(directive); strings.HasPrefix(d, "script-src ") {
+			scriptSrc = d
+		}
+	}
+	if scriptSrc == "" {
+		t.Fatalf("CSP has no script-src directive: %q", csp)
+	}
+	if strings.Contains(scriptSrc, "'unsafe-inline'") || strings.Contains(scriptSrc, "'unsafe-eval'") {
+		t.Fatalf("script-src must not allow inline or eval scripts: %q", scriptSrc)
+	}
+}
+
 func TestValidJWTSecretRejectsWeakAndPlaceholderValues(t *testing.T) {
 	for _, secret := range []string{
 		"",
