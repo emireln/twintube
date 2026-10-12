@@ -833,8 +833,10 @@ export class UIManager {
       this.bindChatMessageActions(el, msg);
     }
 
+    // Follow new messages only while the reader is near the bottom, so reading history is not interrupted.
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
     container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
+    if (nearBottom) container.scrollTop = container.scrollHeight;
   }
 
   formatVideoTime(seconds) {
