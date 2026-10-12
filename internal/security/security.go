@@ -145,6 +145,20 @@ func parseIPValue(value string) net.IP {
 	return net.ParseIP(value)
 }
 
+// defaultTrustedProxyCIDRs cover private networks, where reverse proxies run in
+// production (host Caddy/nginx seen through the Docker bridge gateway, or a proxy
+// container on the compose network). The app publishes its port on 127.0.0.1
+// only, so a request from these networks can only come from a local proxy.
+var defaultTrustedProxyCIDRs = []string{
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"fc00::/7",
+}
+
+// isTrustedProxy reports whether a TCP peer may supply forwarded client headers.
+// Loopback is always trusted. TRUSTED_PROXIES, when set, replaces the private
+// network defaults; when empty, the defaults apply.
 func isTrustedProxy(ip net.IP) bool {
 	if ip == nil {
 		return false
@@ -152,7 +166,11 @@ func isTrustedProxy(ip net.IP) bool {
 	if ip.IsLoopback() {
 		return true
 	}
-	for _, entry := range strings.Split(os.Getenv("TRUSTED_PROXIES"), ",") {
+	entries := strings.Split(os.Getenv("TRUSTED_PROXIES"), ",")
+	if strings.TrimSpace(os.Getenv("TRUSTED_PROXIES")) == "" {
+		entries = defaultTrustedProxyCIDRs
+	}
+	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue

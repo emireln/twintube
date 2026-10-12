@@ -19,6 +19,31 @@ func TestClientIPIgnoresHeadersFromUntrustedPeer(t *testing.T) {
 	}
 }
 
+// Behind Docker port publishing or a proxy container, the app sees the bridge
+// gateway (a private address) as the peer. Without TRUSTED_PROXIES set, that
+// proxy must still be trusted or every visitor shares one rate-limit bucket.
+func TestClientIPTrustsPrivateProxyByDefault(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "")
+	request := httptest.NewRequest("GET", "http://example.test/", nil)
+	request.RemoteAddr = "172.18.0.1:44321"
+	request.Header.Set("X-Forwarded-For", "198.51.100.24")
+
+	if got := ClientIP(request); got != "198.51.100.24" {
+		t.Fatalf("default proxy trust should honor X-Forwarded-For from a private peer: got %q", got)
+	}
+}
+
+func TestClientIPIgnoresPrivatePeerWhenExplicitListOmitsIt(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "127.0.0.1/32")
+	request := httptest.NewRequest("GET", "http://example.test/", nil)
+	request.RemoteAddr = "172.18.0.1:44321"
+	request.Header.Set("X-Forwarded-For", "198.51.100.24")
+
+	if got := ClientIP(request); got != "172.18.0.1" {
+		t.Fatalf("explicit TRUSTED_PROXIES should replace the private-network default: got %q", got)
+	}
+}
+
 func TestClientIPWalksTrustedForwardedChain(t *testing.T) {
 	t.Setenv("TRUSTED_PROXIES", "127.0.0.1/32,10.0.0.0/8")
 	request := httptest.NewRequest("GET", "http://example.test/", nil)
