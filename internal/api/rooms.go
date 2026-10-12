@@ -429,7 +429,9 @@ func (h *RoomAPIHandler) HandleDeleteRoom(w http.ResponseWriter, r *http.Request
 
 	if db.Database != nil {
 		if err := db.Database.DeleteOwnedRoom(code, claims.UserID); err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
 	}

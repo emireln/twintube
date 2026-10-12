@@ -202,6 +202,14 @@ func allowedOrigins() []string {
 	}
 }
 
+// writeJSONError answers with a JSON error body. Messages can echo user input, so
+// they are encoded rather than spliced into JSON text, which broke on quotes.
+func writeJSONError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
 func handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -241,7 +249,7 @@ func handleVideoInfo(w http.ResponseWriter, r *http.Request) {
 
 	info, err := utils.ExtractVideoInfo(videoInput)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

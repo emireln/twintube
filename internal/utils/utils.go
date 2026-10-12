@@ -70,7 +70,7 @@ func TruncateRunes(s string, max int) string {
 // ExtractYouTubeID parses various YouTube URL formats and extracts the 11-character video ID
 func ExtractYouTubeID(input string) (string, error) {
 	input = strings.TrimSpace(input)
-	
+
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_-]{11}$`, input); matched {
 		return input, nil
 	}
@@ -136,11 +136,11 @@ func ExtractVideoInfo(input string) (*VideoInfo, error) {
 		}
 		videoID := "local:" + id
 		return finishVideoInfo(&VideoInfo{
-			Platform: "local",
-			VideoID:  videoID,
-			EmbedURL: videoID,
-			Title:    "Local video",
-			Author:   "Local file",
+			Platform:  "local",
+			VideoID:   videoID,
+			EmbedURL:  videoID,
+			Title:     "Local video",
+			Author:    "Local file",
 			MediaKind: "vod",
 		}, source), nil
 	}
@@ -315,7 +315,7 @@ type YouTubeMetadata struct {
 // FetchYouTubeMetadata fetches public metadata via YouTube's oEmbed endpoint
 func FetchYouTubeMetadata(videoID string) (*YouTubeMetadata, error) {
 	targetURL := fmt.Sprintf("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=%s&format=json", url.QueryEscape(videoID))
-	
+
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(targetURL)
 	if err != nil {
