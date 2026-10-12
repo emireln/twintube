@@ -492,7 +492,14 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		} else if payload.MediaKind != "live" {
 			meta.Seekable = true
 		}
-		c.Room.UpdateVideoState(payload.VideoID, payload.Status, payload.CurrentTime, payload.Title, meta)
+
+		report, err := room.NewPlaybackReport(payload.VideoID, payload.Status, payload.CurrentTime, payload.Title, meta)
+		if err != nil {
+			log.Printf("[ROOM %s] Rejected playback report from %s: %v", c.RoomID, c.Nickname, err)
+			c.Room.SendCorrectiveState(c)
+			return
+		}
+		c.Room.UpdateVideoState(report.VideoID, report.Status, report.CurrentTime, report.Title, report.Meta)
 
 	case "CHAT_MESSAGE":
 		if c.Room == nil {

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // GenerateRandomID creates a random hex string of given byte length
@@ -43,14 +44,27 @@ func IsValidRoomID(id string) bool {
 
 // SanitizeNickname trims and caps display names for chat/rooms.
 func SanitizeNickname(name string) string {
-	name = strings.TrimSpace(name)
-	if name == "" {
+	return TruncateRunes(strings.TrimSpace(name), 25)
+}
+
+// TruncateRunes returns at most max characters of s. It cuts only between
+// characters, so multi-byte UTF-8 text (accents, emoji) is never split into
+// invalid bytes.
+func TruncateRunes(s string, max int) string {
+	if max <= 0 {
 		return ""
 	}
-	if len(name) > 25 {
-		name = name[:25]
+	if utf8.RuneCountInString(s) <= max {
+		return s
 	}
-	return name
+	count := 0
+	for i := range s {
+		if count == max {
+			return s[:i]
+		}
+		count++
+	}
+	return s
 }
 
 // ExtractYouTubeID parses various YouTube URL formats and extracts the 11-character video ID
