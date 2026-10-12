@@ -2,6 +2,17 @@
 
 import { getLocalBlobUrl, isLocalVideoId } from './localmedia.js';
 
+/** Only absolute http(s) URLs may reach an iframe or media element. */
+export function isSafeWebUrl(value) {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch (_) {
+    return false;
+  }
+}
+
 export class VideoPlayer {
   constructor(onLocalStateChange, onVideoEnded, onNeedLocalFile = null) {
     this.ytPlayer = null;
@@ -294,21 +305,22 @@ export class VideoPlayer {
     if (isLocalVideoId(videoId)) {
       return getLocalBlobUrl(videoId);
     }
-    if (sourceUrl && (sourceUrl.startsWith('http://') || sourceUrl.startsWith('https://') || sourceUrl.startsWith('blob:'))) {
+    if (sourceUrl && (sourceUrl.startsWith('blob:') || isSafeWebUrl(sourceUrl))) {
       return sourceUrl;
     }
-    return videoId;
+    return isSafeWebUrl(videoId) ? videoId : '';
   }
 
   buildEmbedUrl(platform, videoId, sourceUrl = '') {
     const parent = encodeURIComponent(window.location.hostname || 'localhost');
     if (sourceUrl && sourceUrl.includes('HOSTNAME')) {
-      return sourceUrl.replace(/HOSTNAME/g, window.location.hostname || 'localhost');
+      const replaced = sourceUrl.replace(/HOSTNAME/g, window.location.hostname || 'localhost');
+      return isSafeWebUrl(replaced) ? replaced : '';
     }
     if (platform === 'vimeo') {
       const match = String(videoId).match(/(?:vimeo\.com\/(?:video\/)?)?([0-9]+)/);
-      const vimeoId = match ? match[1] : videoId;
-      return `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
+      if (!match) return '';
+      return `https://player.vimeo.com/video/${match[1]}?autoplay=1`;
     }
     if (platform === 'twitch') {
       if (String(videoId).startsWith('channel:')) {
@@ -329,7 +341,8 @@ export class VideoPlayer {
         return `https://${parts[0]}/videos/embed/${parts[1]}`;
       }
     }
-    return sourceUrl || videoId;
+    const fallback = sourceUrl || videoId;
+    return isSafeWebUrl(fallback) ? fallback : '';
   }
 
   applyHtml5Playback(src, status, expectedTime, needsLoad, seekable) {
@@ -525,7 +538,9 @@ export class VideoPlayer {
       this.applyHtml5Playback(src, status, expectedTime, needsLoad, this.seekable);
     } else if (this.genericPlayer) {
       const embedUrl = this.buildEmbedUrl(platform, videoId, this.sourceUrl);
-      if (embedUrl && this.genericPlayer.src !== embedUrl) {
+      if (!embedUrl) {
+        this.genericPlayer.removeAttribute('src');
+      } else if (this.genericPlayer.src !== embedUrl) {
         this.genericPlayer.src = embedUrl;
       }
     }

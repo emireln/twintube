@@ -1,7 +1,7 @@
 import { getLanguage, getLanguageLabel, setLanguage, updateDOMTranslations, t } from './i18n.js';
 
 function queueThumbUrl(item) {
-  if (item.thumbnailUrl) return item.thumbnailUrl;
+  if (item.thumbnailUrl && /^https:\/\//i.test(item.thumbnailUrl)) return item.thumbnailUrl;
   const id = item.videoId || '';
   if (id.startsWith('local:')) {
     return '/static/icons/local-video.svg';
@@ -815,7 +815,7 @@ export class UIManager {
           <div class="msg-header-row">
             <div class="msg-header">
               <span class="msg-author">${this.escapeHTML(msg.nickname)}</span>
-              <span class="msg-time">${msg.timestamp || ''}</span>
+              <span class="msg-time">${this.escapeHTML(msg.timestamp || '')}</span>
             </div>
             <div class="msg-actions">
               <button type="button" class="msg-action-btn btn-msg-reply" title="${t('chat_reply')}">${t('chat_reply')}</button>
@@ -850,9 +850,10 @@ export class UIManager {
     if (!entries.length) {
       return `<div class="msg-reactions" data-message-id="${this.escapeHTML(messageId || '')}"></div>`;
     }
-    const chips = entries.map(([emoji, count]) =>
-      `<button type="button" class="msg-reaction-chip" data-emoji="${emoji}">${emoji}<span>${count}</span></button>`
-    ).join('');
+    const chips = entries.map(([emoji, count]) => {
+      const safeEmoji = this.escapeHTML(emoji);
+      return `<button type="button" class="msg-reaction-chip" data-emoji="${safeEmoji}">${safeEmoji}<span>${Number(count) || 0}</span></button>`;
+    }).join('');
     return `<div class="msg-reactions" data-message-id="${this.escapeHTML(messageId || '')}">${chips}</div>`;
   }
 
@@ -1075,7 +1076,7 @@ export class UIManager {
 
       el.innerHTML = `
         ${canModerate ? `<span class="queue-drag" title="${t('reorder_queue')}" aria-hidden="true">⋮⋮</span>` : ''}
-        <img class="queue-thumb" src="${queueThumbUrl(item)}" alt="Thumb">
+        <img class="queue-thumb" src="${this.escapeHTML(queueThumbUrl(item))}" alt="Thumb">
         <div class="queue-details">
           <div class="queue-title">${this.escapeHTML(item.title)}</div>
           <div class="queue-meta">${t('queue_added_by')} ${this.escapeHTML(item.addedBy)}</div>
