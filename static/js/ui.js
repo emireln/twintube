@@ -1,5 +1,8 @@
 import { getLanguage, getLanguageLabel, setLanguage, updateDOMTranslations, t } from './i18n.js';
 
+/** Chat lines kept in the DOM. The server only retains its latest lines for history. */
+const CHAT_DOM_LIMIT = 300;
+
 function queueThumbUrl(item) {
   if (item.thumbnailUrl && /^https:\/\//i.test(item.thumbnailUrl)) return item.thumbnailUrl;
   const id = item.videoId || '';
@@ -836,6 +839,14 @@ export class UIManager {
     // Follow new messages only while the reader is near the bottom, so reading history is not interrupted.
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
     container.appendChild(el);
+    // Long sessions would otherwise grow the DOM without bound. Trim the oldest lines and,
+    // for a reader scrolled up, shift the view by the removed height so their place holds.
+    while (container.childElementCount > CHAT_DOM_LIMIT) {
+      const oldest = container.firstElementChild;
+      const removedHeight = oldest.offsetHeight;
+      oldest.remove();
+      if (!nearBottom) container.scrollTop = Math.max(0, container.scrollTop - removedHeight);
+    }
     if (nearBottom) container.scrollTop = container.scrollHeight;
   }
 
