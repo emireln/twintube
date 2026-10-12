@@ -434,7 +434,7 @@ func (h *RoomAPIHandler) HandleDeleteRoom(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	h.Manager.RemoveRoom(code)
+	h.Manager.EndRoom(code, "Room not found.")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})

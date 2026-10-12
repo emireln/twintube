@@ -272,7 +272,7 @@ func clientReadPump(c *room.Client) {
 	defer func() {
 		room.GlobalPresence.Unregister(c)
 		if c.Room != nil {
-			c.Room.Unregister <- c
+			c.Room.Leave(c)
 		}
 		c.Conn.Close()
 	}()
@@ -419,7 +419,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			if db.Database != nil && meta.OwnerID != "" {
 				_ = db.Database.DeleteOwnedRoom(payload.RoomID, meta.OwnerID)
 			}
-			room.Manager.RemoveRoom(payload.RoomID)
+			room.Manager.EndRoom(payload.RoomID, "This room has expired.")
 			denyRoomJoin(c, "This room has expired.")
 			return
 		}
@@ -450,14 +450,17 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 		if target.IsExpired() {
 			target.ReleasePendingJoin()
-			room.Manager.RemoveRoom(payload.RoomID)
+			room.Manager.EndRoom(payload.RoomID, "This room has expired.")
 			denyRoomJoin(c, "This room has expired.")
 			return
 		}
 
 		c.RoomID = payload.RoomID
 		c.Room = target
-		c.Room.Register <- c
+		if !c.Room.Join(c) {
+			denyRoomJoin(c, "Room not found.")
+			return
+		}
 
 	case "STATE_CHANGE":
 		if c.Room == nil {
@@ -619,10 +622,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s added '%s' to the queue.", c.Nickname, title))
 
 		raw, _ := json.Marshal(playlist)
-		c.Room.Broadcast <- room.WSMessage{
+		c.Room.Publish(room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
-		}
+		})
 
 	case "PLAY_QUEUE_ITEM":
 		if c.Room == nil {
@@ -657,10 +660,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("Now playing: '%s'", targetItem.Title))
 
 		raw, _ := json.Marshal(playlist)
-		c.Room.Broadcast <- room.WSMessage{
+		c.Room.Publish(room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
-		}
+		})
 
 	case "REMOVE_QUEUE_ITEM":
 		if c.Room == nil {
@@ -684,10 +687,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 
 		raw, _ := json.Marshal(playlist)
-		c.Room.Broadcast <- room.WSMessage{
+		c.Room.Publish(room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
-		}
+		})
 
 	case "REORDER_QUEUE":
 		if c.Room == nil {
@@ -707,17 +710,17 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		if !ok {
 			sendError(c, "invalid_queue_order")
 			raw, _ := json.Marshal(playlist)
-			c.Room.Broadcast <- room.WSMessage{Action: "QUEUE_UPDATE", Payload: raw}
+			c.Room.Publish(room.WSMessage{Action: "QUEUE_UPDATE", Payload: raw})
 			return
 		}
 		if db.Database != nil && c.Room.IsPersistent() {
 			_ = db.Database.ReplacePlaylistPositions(c.RoomID, playlist)
 		}
 		raw, _ := json.Marshal(playlist)
-		c.Room.Broadcast <- room.WSMessage{
+		c.Room.Publish(room.WSMessage{
 			Action:  "QUEUE_UPDATE",
 			Payload: raw,
-		}
+		})
 
 	case "SET_ROOM_PERMISSIONS":
 		if c.Room == nil {
@@ -862,7 +865,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		}
 		c.Room.PersistMomentStatus(m)
 		raw, _ := json.Marshal(map[string]string{"momentId": m.ID})
-		c.Room.Broadcast <- room.WSMessage{Action: "MOMENT_REJECTED", Payload: raw}
+		c.Room.Publish(room.WSMessage{Action: "MOMENT_REJECTED", Payload: raw})
 
 	case "JUMP_TO_MOMENT":
 		if c.Room == nil {
@@ -979,10 +982,10 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 			"reaction": payload.Reaction,
 			"nickname": c.Nickname,
 		})
-		c.Room.Broadcast <- room.WSMessage{
+		c.Room.Publish(room.WSMessage{
 			Action:  "VIDEO_REACTION",
 			Payload: raw,
-		}
+		})
 
 	case "LOCAL_FILE_STATUS":
 		if c.Room == nil {

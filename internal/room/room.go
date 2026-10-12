@@ -140,6 +140,19 @@ func (rm *RoomManager) RemoveRoom(roomID string) {
 	delete(rm.rooms, roomID)
 }
 
+// EndRoom removes a room from the manager and disconnects everyone still inside it.
+// Deletion and expiry use it so people who were in a removed room are not left
+// relaying chat and playback in a room nobody can join anymore.
+func (rm *RoomManager) EndRoom(roomID, reason string) {
+	rm.mu.Lock()
+	room := rm.rooms[roomID]
+	delete(rm.rooms, roomID)
+	rm.mu.Unlock()
+	if room != nil {
+		room.Close(reason)
+	}
+}
+
 func (rm *RoomManager) GetRoom(roomID string) *Room {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
@@ -424,6 +437,82 @@ func (r *Room) stopRun() {
 	})
 }
 
+// Close ends the room for everyone inside it. New joins are refused, each connected
+// client receives reason as an ERROR, and their sockets close shortly after, which
+// makes their read loops unregister them. Run exits once the last one has left.
+func (r *Room) Close(reason string) {
+	r.mu.Lock()
+	if r.destroyed {
+		r.mu.Unlock()
+		return
+	}
+	r.destroyed = true
+	r.cancelGuestGraceDestroyLocked()
+	clients := make([]*Client, 0, len(r.Clients))
+	for _, client := range r.Clients {
+		clients = append(clients, client)
+	}
+	r.mu.Unlock()
+
+	raw, _ := json.Marshal(map[string]string{"message": reason})
+	for _, client := range clients {
+		client.TrySend(WSMessage{Action: "ERROR", Payload: raw})
+		client.disconnectSoon()
+	}
+	r.stopIfClosed()
+}
+
+// stopIfClosed ends the run loop of a closed room once nobody is inside and no join
+// is in flight. It reports whether the loop was stopped. Callers must not hold r.mu.
+func (r *Room) stopIfClosed() bool {
+	r.mu.RLock()
+	finished := r.destroyed && len(r.Clients) == 0 && r.pendingJoins == 0
+	r.mu.RUnlock()
+	if finished {
+		r.stopRun()
+	}
+	return finished
+}
+
+// Join hands a client to the run loop. It returns false when the room has stopped,
+// so a join never blocks on a room that no longer exists.
+func (r *Room) Join(client *Client) bool {
+	select {
+	case r.Register <- client:
+		return true
+	case <-r.stopCh:
+		return false
+	}
+}
+
+// Leave tells the run loop that a client disconnected. It never blocks on a stopped room.
+func (r *Room) Leave(client *Client) {
+	select {
+	case r.Unregister <- client:
+	case <-r.stopCh:
+	}
+}
+
+// Publish queues a message for fan-out by Run. It drops the message once the room has stopped.
+func (r *Room) Publish(message WSMessage) {
+	select {
+	case r.Broadcast <- message:
+	case <-r.stopCh:
+	}
+}
+
+// disconnectSoon closes the client's socket after a short delay, so a final ERROR
+// message has time to reach the browser before the connection drops.
+func (c *Client) disconnectSoon() {
+	conn := c.Conn
+	if conn == nil {
+		return
+	}
+	time.AfterFunc(150*time.Millisecond, func() {
+		_ = conn.Close()
+	})
+}
+
 func (r *Room) destroyEphemeralAfterGrace(roomID string) {
 	manager := r.manager
 	if manager == nil {
@@ -462,7 +551,11 @@ func (r *Room) Run() {
 			}
 			if r.destroyed {
 				r.mu.Unlock()
-				client.TrySend(WSMessage{Action: "ERROR", Payload: json.RawMessage(`{"message":"Room is no longer available."}`)})
+				// Reuse the wording the browser treats as "room gone" so it leaves the room page.
+				client.TrySend(WSMessage{Action: "ERROR", Payload: json.RawMessage(`{"message":"Room not found."}`)})
+				if r.stopIfClosed() {
+					return
+				}
 				continue
 			}
 			if client.JoinedAt.IsZero() {
@@ -556,6 +649,10 @@ func (r *Room) Run() {
 				r.mu.Lock()
 				r.scheduleGuestGraceDestroyLocked()
 				r.mu.Unlock()
+			}
+
+			if r.stopIfClosed() {
+				return
 			}
 
 		case message := <-r.Broadcast:
@@ -798,11 +895,11 @@ func (r *Room) UpdateVideoState(videoId string, status string, currentTime float
 	}
 
 	raw, _ := json.Marshal(statePayload)
-	r.Broadcast <- WSMessage{
+	r.Publish(WSMessage{
 		Action:    "STATE_UPDATE",
 		Payload:   raw,
 		Timestamp: nowMs,
-	}
+	})
 	r.BroadcastRoomMeta()
 }
 
@@ -843,11 +940,11 @@ func (r *Room) ClearCurrentVideo(from *Client) bool {
 		"forceReload":     true,
 	}
 	raw, _ := json.Marshal(statePayload)
-	r.Broadcast <- WSMessage{
+	r.Publish(WSMessage{
 		Action:    "STATE_UPDATE",
 		Payload:   raw,
 		Timestamp: nowMs,
-	}
+	})
 	r.BroadcastRoomMeta()
 	return true
 }
