@@ -774,7 +774,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.BroadcastSystemAlert(fmt.Sprintf("%s cleared the current video.", c.Nickname))
 
 	case "TRANSFER_HOST":
-		if c.Room == nil || !c.IsHost {
+		if c.Room == nil {
 			sendError(c, "permission_denied")
 			return
 		}
@@ -957,7 +957,7 @@ func handleIncomingAction(c *room.Client, msg room.WSMessage) {
 		c.Room.BroadcastUserList()
 
 	case "RTC_OFFER", "RTC_ANSWER", "RTC_ICE":
-		if c.Room == nil || !c.VoiceJoined {
+		if c.Room == nil || !c.Room.IsVoiceJoined(c) {
 			return
 		}
 		if len(msg.Payload) > 16*1024 {

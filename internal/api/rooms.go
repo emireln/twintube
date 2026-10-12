@@ -125,11 +125,7 @@ func (h *RoomAPIHandler) HandleCreateRoom(w http.ResponseWriter, r *http.Request
 			}
 		}
 		rmRoom = h.Manager.GetOrCreateRoom(roomID)
-		rmRoom.Name = req.Name
-		rmRoom.IsPrivate = req.Password != ""
-		rmRoom.OwnerID = userID
-		rmRoom.PasswordHash = pwdHash
-		rmRoom.ExpiresAt = expiresAt
+		rmRoom.Configure(req.Name, req.Password != "", userID, pwdHash, expiresAt)
 	}
 
 	hostNickname := req.Name

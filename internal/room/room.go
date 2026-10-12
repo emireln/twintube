@@ -949,6 +949,18 @@ func (r *Room) ClearCurrentVideo(from *Client) bool {
 	return true
 }
 
+// Configure applies the settings of a room that was just saved. Its run loop may
+// already be serving joins, so the fields are written under the room lock.
+func (r *Room) Configure(name string, isPrivate bool, ownerID, passwordHash string, expiresAt *time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.Name = name
+	r.IsPrivate = isPrivate
+	r.OwnerID = ownerID
+	r.PasswordHash = passwordHash
+	r.ExpiresAt = expiresAt
+}
+
 func (r *Room) AppendPlaylistItem(item db.PlaylistItem) (db.PlaylistItem, []db.PlaylistItem) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

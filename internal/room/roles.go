@@ -465,6 +465,14 @@ func (r *Room) SetVoiceJoined(client *Client, joined bool) bool {
 	return true
 }
 
+// IsVoiceJoined reports whether a client is in the push-to-talk session. The read
+// loop checks it before relaying signaling, and Run writes the flag under the lock.
+func (r *Room) IsVoiceJoined(client *Client) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return client != nil && client.VoiceJoined
+}
+
 func (r *Room) SetVoiceStatus(client *Client, muted, speaking bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
