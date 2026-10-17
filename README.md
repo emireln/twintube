@@ -21,7 +21,7 @@
 
 ---
 
-This application was developed while I was studying Go and WebSockets, with the help of AI (Cursor & OxAlpha).
+This application was developed while I was studying Go and WebSockets, with the help of AI (Composer 2.5, OxAlpha & Claude Haiku 5.5).
 
 ---
 
